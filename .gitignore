@@ -105,3 +105,17 @@ dist
 
 # Mac OS
 .DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# ChromaDB
+chroma_data/
+
+# Machine Learning Models (Optional)
+# app/models/
