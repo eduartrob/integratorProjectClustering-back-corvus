@@ -247,15 +247,33 @@ async def check_blue_ocean(project_id: str):
 async def get_blue_ocean_niches():
     """
     Retorna una lista de nichos de mercado u 'Océanos Azules' inexplorados 
-    basado en el análisis global de los proyectos.
-    (Ideal para mostrar en la pantalla principal de la app móvil).
+    basado en el análisis global de los proyectos (leído desde unexplored_topics.json).
     """
-    # En un futuro, estos datos podrían generarse con un LLM analizando las zonas
-    # vacías del cluster. Por ahora, proveemos la estructura de datos para la UI.
-    return {
-        "title": "Temas Inexplorados",
-        "description": "Descubre océanos azules en la intersección de la tecnología y la sociedad. Selecciona un área de innovación para comenzar tu investigación.",
-        "niches": [
+    import json
+    from pathlib import Path
+    
+    niches = []
+    try:
+        model_dir = Path(__file__).resolve().parent.parent / "models"
+        topics_path = model_dir / "unexplored_topics.json"
+        
+        if topics_path.exists():
+            with open(topics_path, "r", encoding="utf-8") as f:
+                topics = json.load(f)
+                
+            for t in topics:
+                niches.append({
+                    "category": "INNOVACIÓN DETECTADA",
+                    "tag": "Área Inexplorada",
+                    "title": t,
+                    "description": "Área de oportunidad identificada matemáticamente a través de los vacíos en el grafo topológico HDBSCAN."
+                })
+    except Exception as e:
+        print(f"Error cargando unexplored_topics.json en routes: {e}")
+        
+    # Fallback si falla o está vacío
+    if not niches:
+        niches = [
             {
                 "category": "IA & Sostenibilidad",
                 "tag": "Alto Potencial",
@@ -281,4 +299,9 @@ async def get_blue_ocean_niches():
                 "description": "Modelado de riesgos hiper-complejos y optimización de carteras utilizando algoritmos cuánticos híbridos."
             }
         ]
+
+    return {
+        "title": "Temas Inexplorados",
+        "description": "Descubre océanos azules en la intersección de la tecnología y la sociedad. Selecciona un área de innovación para comenzar tu investigación.",
+        "niches": niches
     }

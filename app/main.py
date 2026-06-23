@@ -4,6 +4,7 @@ import uvicorn
 
 from app.core.config import settings
 from app.api.routes import router as api_router
+from app.api.admin_routes import router as admin_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(admin_router, prefix=f"{settings.API_V1_STR}/admin")
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=settings.PORT, reload=True)

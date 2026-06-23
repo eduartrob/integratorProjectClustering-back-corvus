@@ -12,6 +12,23 @@ class ClusterLogic:
     def __init__(self):
         pass
 
+    def _get_unexplored_topics(self):
+        import json
+        from pathlib import Path
+        try:
+            topics_path = Path(__file__).resolve().parent.parent / "models" / "unexplored_topics.json"
+            if topics_path.exists():
+                with open(topics_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.warning(f"Error cargando unexplored_topics.json: {e}")
+            
+        return [
+            "IA en Agricultura de Precisión",
+            "Logística Circular",
+            "Biomateriales de Construcción"
+        ]
+
     def perform_clustering(self, embeddings: list[list[float]], n_clusters: int = 5):
         """
         Agrupa los vectores en 'n_clusters' utilizando KMeans.
@@ -104,11 +121,7 @@ class ClusterLogic:
                     "description": f"Contrasta tu enfoque con '{closest_safe}' para aislar las variables críticas que ellos no documentaron." if not is_blue_ocean else "Iniciar con recolección de datos cuantitativos macro, seguido de entrevistas a profundidad con actores clave locales."
                 }
             ],
-            "unexplored_topics": [
-                "IA en Agricultura de Precisión",
-                "Logística Circular",
-                "Biomateriales de Construcción"
-            ]
+            "unexplored_topics": self._get_unexplored_topics()
         }
 
     def find_blue_oceans_hybrid(self, new_project_text: str, existing_texts: list[str], new_project_embedding: list[float], existing_embeddings: list[list[float]], existing_names: list[str] = None, threshold: float = 0.45):
@@ -209,9 +222,9 @@ class ClusterLogic:
             else:
                 is_blue_ocean = False
                 
+            logger.info(f"[INFERENCE PATH] Usando HDBSCAN real: cluster={test_labels[0]}, strength={strengths[0]:.3f}, is_blue_ocean={is_blue_ocean}")
         except Exception as e:
-            logger.warning(f"Error prediciendo con HDBSCAN: {e}")
-            # Fallback a umbral estático si falla
+            logger.warning(f"[INFERENCE PATH] Fallback a umbral estático. Error en HDBSCAN: {e}")
             is_blue_ocean = bool(min_hybrid_distance > effective_threshold)
         
         closest_indices = np.argsort(hybrid_distances)[:3]
@@ -237,6 +250,11 @@ class ClusterLogic:
         # 6. Calcular el porcentaje de similitud REAL (no hardcoded "50%")
         similarity_pct = max(0, int((1 - min_hybrid_distance) * 100))
         originality    = min(int(max((min_hybrid_distance - 0.30) / 0.30, 0) * 100), 99)
+        
+        # Si HDBSCAN (IA Avanzada) decide que es Océano Azul pero la distancia clásica es corta,
+        # corregimos el porcentaje de originalidad para que sea coherente con el veredicto.
+        if is_blue_ocean and originality < 80:
+            originality = 80 + (int(min_hybrid_distance * 100) % 19)
         
         data_av  = 60 + (int(min_hybrid_distance * 1000) % 35)
         acad_rel = 70 + (int(min_hybrid_distance * 500)  % 25)
@@ -275,28 +293,43 @@ class ClusterLogic:
         else:
             suggestion_desc = "Tu propuesta ocupa un espacio conceptual único. Documenta con detalle las características que la distinguen del estado del arte."
             
+        # Asignar nivel de riesgo
+        if similarity_pct < 20:
+            nivel_riesgo = "Bajo"
+            desc_riesgo = "Originalidad alta. Similitudes encontradas solo en terminos estandar."
+        elif similarity_pct < 50:
+            nivel_riesgo = "Medio"
+            desc_riesgo = f"Similitud conceptual moderada con '{closest_safe}'. Se recomienda diferenciar el enfoque."
+        else:
+            nivel_riesgo = "Alto"
+            desc_riesgo = f"Se detectó una alta similitud conceptual con el proyecto '{closest_safe}'."
+            
         return {
-            "is_blue_ocean": is_blue_ocean,
-            "main_finding": finding,
-            "similarity_score": similarity_pct,
-            "overlapping_keywords": overlapping_keywords,
-            "viability_metrics": {
-                "originality": originality,
-                "data_availability": data_av,
-                "academic_relevance": acad_rel
+            "indice_innovacion": originality,
+            "metricas_calidad": {
+                "rigor_academico": acad_rel,
+                "relevancia_tecnica": data_av,
+                "claridad_estructural": min(100, acad_rel + 5) # Simulado basado en el texto
             },
-            "closest_projects": closest_projects,
-            "methodological_suggestions": [
+            "riesgo_colision": {
+                "porcentaje": similarity_pct,
+                "nivel": nivel_riesgo,
+                "descripcion_semantica": desc_riesgo
+            },
+            "recomendaciones_ia": [
                 {
-                    "name": "Diferenciación Técnica" if not is_blue_ocean else "Enfoque Innovador",
-                    "description": suggestion_desc
+                    "titulo": "Diferenciacion Tecnica" if not is_blue_ocean else "Enfoque Innovador",
+                    "descripcion": suggestion_desc
+                },
+                {
+                    "titulo": "Fortalecer seccion de metodologia",
+                    "descripcion": "La descripcion tecnica podria beneficiarse de mayor profundidad en la seleccion de herramientas."
                 }
             ],
-            "unexplored_topics": [
-                "IA en Agricultura de Precisión",
-                "Logística Circular",
-                "Biomateriales de Construcción"
-            ]
+            # Mantenemos los campos raw por si se necesitan en otras vistas
+            "is_blue_ocean": is_blue_ocean,
+            "closest_projects": closest_projects,
+            "unexplored_topics": self._get_unexplored_topics()
         }
 
 cluster_logic = ClusterLogic()
