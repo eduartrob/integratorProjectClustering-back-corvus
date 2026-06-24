@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # Base de Datos
     CHROMA_DB_PATH: str = "./chroma_data"
     POSTGRES_DB_URL: str = "postgresql://postgres:postgres@localhost:5433/corvus_clustering_integrator_db"
+    
+    # Modelos IA
+    MODELS_DIR: str = "./app/models"
 
     class Config:
         env_file = ".env"
