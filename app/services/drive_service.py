@@ -64,4 +64,26 @@ class DriveService:
         text = self.extract_text_from_pdf_stream(pdf_stream)
         return text
 
+    def get_files_in_folder(self, folder_id: str, access_token: str) -> list:
+        """
+        Obtiene la lista de archivos PDF dentro de una carpeta específica de Drive.
+        Retorna lista de diccionarios: [{"id": "...", "name": "..."}]
+        """
+        try:
+            service = self.get_drive_service(access_token)
+            query = f"'{folder_id}' in parents and mimeType='application/pdf' and trashed=false"
+            
+            results = service.files().list(
+                q=query,
+                fields="nextPageToken, files(id, name)",
+                pageSize=100
+            ).execute()
+            
+            files = results.get('files', [])
+            logger.info(f"Se encontraron {len(files)} PDFs en la carpeta {folder_id}")
+            return files
+        except Exception as e:
+            logger.error(f"Error listando archivos en la carpeta {folder_id}: {str(e)}")
+            return []
+
 drive_service = DriveService()

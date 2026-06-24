@@ -1,16 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel
 from typing import List
 import pdfplumber
 import io
 import numpy as np
-from pydantic import BaseModel
-from typing import List
 
 from app.services.drive_service import drive_service
 from app.services.nlp_service import nlp_service
 from app.services.chroma_service import chroma_service
 from app.services.cluster_logic import cluster_logic
+from app.services.rabbitmq_service import rabbitmq_service
 
 router = APIRouter()
 
@@ -19,6 +18,10 @@ class ProcessProjectRequest(BaseModel):
     drive_file_id: str
     access_token: str # En producción esto vendría en los headers, lo dejamos aquí por practicidad ahora.
     url_drive: str
+
+class ProcessFolderRequest(BaseModel):
+    folder_id: str
+    access_token: str
 
 @router.get("/health")
 async def health_check():
@@ -73,6 +76,81 @@ async def process_project_document(request: ProcessProjectRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+async def process_folder_background(folder_id: str, access_token: str):
+    try:
+        files = drive_service.get_files_in_folder(folder_id, access_token)
+        total = len(files)
+        if total == 0:
+            rabbitmq_service.publish_progress(
+                user_id="admin",
+                type_event="sync_error",
+                progress=0,
+                total=0,
+                message="No se encontraron PDFs en la carpeta."
+            )
+            return
+
+        for i, file_info in enumerate(files):
+            file_id = file_info.get("id")
+            file_name = file_info.get("name")
+            
+            rabbitmq_service.publish_progress(
+                user_id="admin",
+                type_event="sync_progress",
+                progress=i,
+                total=total,
+                message=f"Vectorizando {file_name}..."
+            )
+            
+            try:
+                text = drive_service.process_drive_file(file_id, access_token)
+                if not text or not nlp_service.is_valid_project(text):
+                    continue
+                
+                clean_text = nlp_service.strip_structure(text)
+                safe_text = nlp_service.anonymize_pii(clean_text)
+                
+                chunks = nlp_service.chunk_text(safe_text)
+                embeddings = nlp_service.vectorize(chunks)
+                
+                project_id = file_name.replace(".pdf", "").replace(".PDF", "").strip().lower()
+                url_drive = f"https://drive.google.com/file/d/{file_id}/view"
+                
+                chroma_service.add_vectors(
+                    project_id=project_id,
+                    texts=chunks,
+                    embeddings=embeddings,
+                    url_drive=url_drive
+                )
+            except Exception as e:
+                print(f"Error procesando {file_name}: {e}")
+                continue
+                
+        rabbitmq_service.publish_progress(
+            user_id="admin",
+            type_event="sync_complete",
+            progress=total,
+            total=total,
+            message="Sincronización de Océanos Azules completada."
+        )
+        
+    except Exception as e:
+        rabbitmq_service.publish_progress(
+            user_id="admin",
+            type_event="sync_error",
+            progress=0,
+            total=0,
+            message=f"Error fatal: {str(e)}"
+        )
+
+@router.post("/process-folder", status_code=202)
+async def process_folder(request: ProcessFolderRequest, background_tasks: BackgroundTasks):
+    """
+    Inicia la sincronización asíncrona de una carpeta entera de Google Drive.
+    """
+    background_tasks.add_task(process_folder_background, request.folder_id, request.access_token)
+    return {"message": "Sincronización iniciada en segundo plano."}
 
 @router.post("/process-local-project")
 async def process_local_project_document(project_id: str, file: UploadFile = File(...)):
