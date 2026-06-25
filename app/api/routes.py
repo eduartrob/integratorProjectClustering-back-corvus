@@ -25,6 +25,7 @@ class ProcessProjectRequest(BaseModel):
 class ProcessFolderRequest(BaseModel):
     folder_id: str
     access_token: str
+    user_id: str
 
 @router.get("/health")
 async def health_check():
@@ -80,7 +81,7 @@ async def process_project_document(request: ProcessProjectRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def process_folder_background(folder_id: str, access_token: str):
+def process_folder_background(folder_id: str, access_token: str, user_id: str):
     print(f"================ INICIANDO TAREA DE BACKGROUND PARA FOLDER {folder_id} ================", flush=True)
     progress_store[folder_id] = {"progress": 0, "total": 100, "message": "Iniciando..."}
     try:
@@ -94,7 +95,7 @@ def process_folder_background(folder_id: str, access_token: str):
         if total_files == 0:
             print("BACKGROUND TASK: Abortando porque no hay archivos", flush=True)
             rabbitmq_service.publish_progress(
-                user_id="admin",
+                user_id=user_id,
                 type_event="sync_complete",
                 progress=100,
                 total=100,
@@ -173,13 +174,22 @@ def process_folder_background(folder_id: str, access_token: str):
             "message": "¡Sincronización completada!"
         }
         
+        # Enviar notificación Push de éxito a Firebase!
+        rabbitmq_service.publish_progress(
+            user_id=user_id,
+            type_event="sync_complete",
+            progress=total_progress,
+            total=total_progress,
+            message="¡Archivos sincronizados y vectorizados en Corvus!"
+        )
+        
         
     except Exception as e:
         print(f"ERROR FATAL DE SINCRONIZACIÓN: {str(e)}")
         import traceback
         traceback.print_exc()
         rabbitmq_service.publish_progress(
-            user_id="admin",
+            user_id=user_id,
             type_event="sync_error",
             progress=0,
             total=0,
@@ -214,7 +224,7 @@ async def process_folder(request: ProcessFolderRequest, background_tasks: Backgr
         print(f"Error verificando carpeta con Auth Service: {e}")
         # Si falla el servicio, continuamos con el flujo normal para no bloquear
 
-    background_tasks.add_task(process_folder_background, request.folder_id, request.access_token)
+    background_tasks.add_task(process_folder_background, request.folder_id, request.access_token, request.user_id)
     return {"message": "Sincronización iniciada en segundo plano.", "sync_skipped": False}
 
 @router.get("/sync-status/{folder_id}")
