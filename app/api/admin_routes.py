@@ -126,49 +126,49 @@ async def update_system_config(request: ConfigUpdateRequest):
     raise HTTPException(status_code=500, detail="Error al actualizar la configuración.")
 
 @router.get("/recent-projects", tags=["Admin Panel"])
-async def get_recent_projects():
+async def get_recent_projects(limit: int = 50):
     """
-    Devuelve la lista de proyectos recientes para la tabla del historial.
+    Devuelve la lista del historial de proyectos extraída desde ChromaDB.
+    Se utiliza para la tabla del panel de administración.
     """
     from app.services.chroma_service import chroma_service
-    import datetime
     try:
         results = chroma_service.collection.get(include=["metadatas"])
-        if not results or not results['metadatas']:
-            return []
-            
-        unique_projects_map = {}
-        for meta in results['metadatas']:
-            pid = meta.get('project_id')
-            if not pid or pid in unique_projects_map:
-                continue
-                
-            raw_name = str(pid).replace('proyecto_', '').replace('_', ' ').title()
-            
-            cluster_id = meta.get('cluster_id')
-            is_blue_ocean = meta.get('is_blue_ocean')
-            
-            if is_blue_ocean is True or cluster_id == -1:
-                status = "Océano Azul"
-                statusClass = "bg-error-container/20 text-error"
-            elif cluster_id is not None:
-                status = f"En Cluster {cluster_id}"
-                statusClass = "bg-primary-container/20 text-primary"
-            else:
-                status = "Pendiente"
-                statusClass = "bg-outline-variant text-on-surface-variant"
-                
-            unique_projects_map[pid] = {
-                "name": raw_name[:45] + "..." if len(raw_name) > 45 else raw_name,
-                "major": "Académico", # Fallback since Chroma DB doesn't store this natively
-                "date": "Reciente",
-                "status": status,
-                "statusClass": statusClass
-            }
-            
-        projects_list = list(unique_projects_map.values())
-        projects_list.reverse() # Mostrar los últimos agregados primero
-        return projects_list[:6]
+        
+        unique_projects = {}
+        if results and results['metadatas']:
+            for meta in results['metadatas']:
+                p_id = meta.get('project_id')
+                if p_id and p_id not in unique_projects:
+                    # Formatear el nombre (ej. 'proyecto_1' -> 'Proyecto 1')
+                    name = p_id.replace('proyecto_', '').replace('_', ' ').title()
+                    
+                    status = "Vectorizado"
+                    status_class = "bg-surface-variant text-on-surface-variant"
+                    
+                    # Determinar el estado en base al clustering
+                    if 'is_blue_ocean' in meta and meta['is_blue_ocean']:
+                        status = "Océano Azul"
+                        status_class = "bg-error-container/20 text-error"
+                    elif 'cluster_id' in meta:
+                        status = f"En Cluster {meta['cluster_id']}"
+                        status_class = "bg-primary-container/20 text-primary"
+                    else:
+                        status = "Pendiente"
+                        status_class = "bg-outline-variant/30 text-on-surface-variant"
+                        
+                    unique_projects[p_id] = {
+                        "id": p_id,
+                        "name": name,
+                        "major": "Ingeniería" if "ing" in name.lower() else "Multidisciplinario",
+                        "date": "Reciente",
+                        "status": status,
+                        "statusClass": status_class
+                    }
+                    
+        projects_list = list(unique_projects.values())
+        # Invertimos la lista para simular orden cronológico (los últimos agregados primero)
+        projects_list.reverse()
+        return projects_list[:limit]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-

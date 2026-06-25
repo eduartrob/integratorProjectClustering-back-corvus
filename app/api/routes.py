@@ -13,6 +13,9 @@ from app.services.rabbitmq_service import rabbitmq_service
 
 router = APIRouter()
 
+# Global in-memory store for sync progress polling
+progress_store = {}
+
 class ProcessProjectRequest(BaseModel):
     project_id: str
     drive_file_id: str
@@ -79,9 +82,11 @@ async def process_project_document(request: ProcessProjectRequest):
 
 async def process_folder_background(folder_id: str, access_token: str):
     print(f"================ INICIANDO TAREA DE BACKGROUND PARA FOLDER {folder_id} ================", flush=True)
+    progress_store[folder_id] = {"progress": 0, "total": 100, "message": "Iniciando..."}
     try:
         files = drive_service.get_files_in_folder(folder_id, access_token)
         total = len(files)
+        progress_store[folder_id] = {"progress": 0, "total": total if total > 0 else 100, "message": f"Se encontraron {total} archivos"}
         print(f"BACKGROUND TASK: Total de archivos detectados = {total}", flush=True)
         if total == 0:
             print("BACKGROUND TASK: Abortando porque no hay archivos", flush=True)
@@ -105,6 +110,12 @@ async def process_folder_background(folder_id: str, access_token: str):
                 total=total,
                 message=f"Vectorizando {file_name}..."
             )
+            
+            progress_store[folder_id] = {
+                "progress": i,
+                "total": total,
+                "message": f"Vectorizando {file_name}..."
+            }
             
             try:
                 text = drive_service.process_drive_file(file_id, file_name, access_token)
@@ -139,6 +150,13 @@ async def process_folder_background(folder_id: str, access_token: str):
             message="Sincronización de Océanos Azules completada."
         )
         
+        progress_store[folder_id] = {
+            "progress": total,
+            "total": total,
+            "message": "¡Sincronización completada!"
+        }
+        
+        
     except Exception as e:
         print(f"ERROR FATAL DE SINCRONIZACIÓN: {str(e)}")
         import traceback
@@ -150,6 +168,11 @@ async def process_folder_background(folder_id: str, access_token: str):
             total=0,
             message=f"Error fatal: {str(e)}"
         )
+        progress_store[folder_id] = {
+            "progress": -1,
+            "total": 100,
+            "message": f"Error fatal: {str(e)}"
+        }
 
 @router.post("/process-folder", status_code=202)
 async def process_folder(request: ProcessFolderRequest, background_tasks: BackgroundTasks):
@@ -176,6 +199,15 @@ async def process_folder(request: ProcessFolderRequest, background_tasks: Backgr
 
     background_tasks.add_task(process_folder_background, request.folder_id, request.access_token)
     return {"message": "Sincronización iniciada en segundo plano.", "sync_skipped": False}
+
+@router.get("/sync-status/{folder_id}")
+async def get_sync_status(folder_id: str):
+    """
+    Devuelve el estado de la sincronización en progreso para el polling del móvil.
+    """
+    if folder_id in progress_store:
+        return progress_store[folder_id]
+    return {"progress": 0, "total": 100, "message": "Esperando inicialización..."}
 
 @router.post("/process-local-project")
 async def process_local_project_document(project_id: str, file: UploadFile = File(...)):
