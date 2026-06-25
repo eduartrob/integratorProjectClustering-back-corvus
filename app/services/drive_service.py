@@ -5,6 +5,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from app.core.config import settings
+from app.core.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +89,10 @@ class DriveService:
                 pageSize=100
             ).execute()
             
-            # Filtramos localmente para asegurar flexibilidad
+            # Filtramos localmente para asegurar flexibilidad usando la configuración
+            allowed_exts = config_manager.get_allowed_extensions()
             all_files = results.get('files', [])
-            files = [f for f in all_files if f.get('name', '').lower().endswith(('.pdf', '.md', '.txt'))]
+            files = [f for f in all_files if f.get('name', '').lower().endswith(allowed_exts)]
             print(f"Se encontraron {len(files)} PDFs en la carpeta {folder_id}", flush=True)
             return files
         except Exception as e:

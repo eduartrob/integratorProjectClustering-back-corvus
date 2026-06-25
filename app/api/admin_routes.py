@@ -103,3 +103,24 @@ async def execute_clustering(background_tasks: BackgroundTasks):
 
     background_tasks.add_task(run_script)
     return {"message": "Clustering global iniciado en segundo plano. Esto puede tomar unos minutos."}
+
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+from app.core.config_manager import config_manager
+from pydantic import BaseModel
+
+class ConfigUpdateRequest(BaseModel):
+    allowed_extensions: list[str]
+
+@router.get("/config")
+async def get_system_config():
+    """Devuelve la configuración actual del microservicio (extensiones, etc.)"""
+    return config_manager.get_config()
+
+@router.post("/config")
+async def update_system_config(request: ConfigUpdateRequest):
+    """Actualiza las extensiones permitidas (.pdf, .md, .txt)"""
+    new_config = {"allowed_extensions": request.allowed_extensions}
+    success = config_manager.save_config(new_config)
+    if success:
+        return {"message": "Configuración actualizada con éxito.", "config": new_config}
+    raise HTTPException(status_code=500, detail="Error al actualizar la configuración.")
