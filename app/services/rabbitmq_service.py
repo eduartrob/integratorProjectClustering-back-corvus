@@ -26,7 +26,7 @@ class RabbitMQService:
             )
             self.connection = pika.BlockingConnection(parameters)
             self.channel = self.connection.channel()
-            self.channel.exchange_declare(exchange=self.exchange, exchange_type='topic')
+            self.channel.exchange_declare(exchange=self.exchange, exchange_type='topic', durable=True)
             logger.info("✅ Conectado a RabbitMQ (Clustering Publisher)")
         except Exception as e:
             logger.error(f"❌ Error conectando a RabbitMQ: {str(e)}")
