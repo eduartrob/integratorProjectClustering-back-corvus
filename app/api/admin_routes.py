@@ -124,3 +124,51 @@ async def update_system_config(request: ConfigUpdateRequest):
     if success:
         return {"message": "Configuración actualizada con éxito.", "config": new_config}
     raise HTTPException(status_code=500, detail="Error al actualizar la configuración.")
+
+@router.get("/recent-projects", tags=["Admin Panel"])
+async def get_recent_projects():
+    """
+    Devuelve la lista de proyectos recientes para la tabla del historial.
+    """
+    from app.services.chroma_service import chroma_service
+    import datetime
+    try:
+        results = chroma_service.collection.get(include=["metadatas"])
+        if not results or not results['metadatas']:
+            return []
+            
+        unique_projects_map = {}
+        for meta in results['metadatas']:
+            pid = meta.get('project_id')
+            if not pid or pid in unique_projects_map:
+                continue
+                
+            raw_name = str(pid).replace('proyecto_', '').replace('_', ' ').title()
+            
+            cluster_id = meta.get('cluster_id')
+            is_blue_ocean = meta.get('is_blue_ocean')
+            
+            if is_blue_ocean is True or cluster_id == -1:
+                status = "Océano Azul"
+                statusClass = "bg-error-container/20 text-error"
+            elif cluster_id is not None:
+                status = f"En Cluster {cluster_id}"
+                statusClass = "bg-primary-container/20 text-primary"
+            else:
+                status = "Pendiente"
+                statusClass = "bg-outline-variant text-on-surface-variant"
+                
+            unique_projects_map[pid] = {
+                "name": raw_name[:45] + "..." if len(raw_name) > 45 else raw_name,
+                "major": "Académico", # Fallback since Chroma DB doesn't store this natively
+                "date": "Reciente",
+                "status": status,
+                "statusClass": statusClass
+            }
+            
+        projects_list = list(unique_projects_map.values())
+        projects_list.reverse() # Mostrar los últimos agregados primero
+        return projects_list[:6]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
