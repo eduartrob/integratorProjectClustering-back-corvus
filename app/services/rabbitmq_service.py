@@ -14,10 +14,14 @@ class RabbitMQService:
 
     def _connect(self):
         try:
-            # En docker-compose el hostname es 'rabbitmq'
-            credentials = pika.PlainCredentials('guest', 'guest')
+            # En docker-compose el broker es 'rabbitmq' y las credenciales son corvus_admin:corvus_secret
+            import os
+            credentials = pika.PlainCredentials(
+                os.getenv('RABBITMQ_USER', 'corvus_admin'), 
+                os.getenv('RABBITMQ_PASS', 'corvus_secret')
+            )
             parameters = pika.ConnectionParameters(
-                host=settings.RABBITMQ_HOST if hasattr(settings, 'RABBITMQ_HOST') else 'rabbitmq',
+                host=os.getenv('RABBITMQ_HOST', 'rabbitmq'),
                 credentials=credentials
             )
             self.connection = pika.BlockingConnection(parameters)

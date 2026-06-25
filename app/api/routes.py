@@ -136,6 +136,9 @@ async def process_folder_background(folder_id: str, access_token: str):
         )
         
     except Exception as e:
+        print(f"ERROR FATAL DE SINCRONIZACIÓN: {str(e)}")
+        import traceback
+        traceback.print_exc()
         rabbitmq_service.publish_progress(
             user_id="admin",
             type_event="sync_error",
