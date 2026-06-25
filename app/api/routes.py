@@ -107,7 +107,7 @@ async def process_folder_background(folder_id: str, access_token: str):
             )
             
             try:
-                text = drive_service.process_drive_file(file_id, access_token)
+                text = drive_service.process_drive_file(file_id, file_name, access_token)
                 if not text or not nlp_service.is_valid_project(text):
                     continue
                 
