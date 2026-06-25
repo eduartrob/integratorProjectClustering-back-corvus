@@ -80,7 +80,7 @@ async def process_project_document(request: ProcessProjectRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-async def process_folder_background(folder_id: str, access_token: str):
+def process_folder_background(folder_id: str, access_token: str):
     print(f"================ INICIANDO TAREA DE BACKGROUND PARA FOLDER {folder_id} ================", flush=True)
     progress_store[folder_id] = {"progress": 0, "total": 100, "message": "Iniciando..."}
     try:
