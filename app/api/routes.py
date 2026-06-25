@@ -85,10 +85,12 @@ def process_folder_background(folder_id: str, access_token: str):
     progress_store[folder_id] = {"progress": 0, "total": 100, "message": "Iniciando..."}
     try:
         files = drive_service.get_files_in_folder(folder_id, access_token)
-        total = len(files)
-        progress_store[folder_id] = {"progress": 0, "total": total if total > 0 else 100, "message": f"Se encontraron {total} archivos"}
-        print(f"BACKGROUND TASK: Total de archivos detectados = {total}", flush=True)
-        if total == 0:
+        total_files = len(files)
+        # Usaremos escala de 100 por archivo para un porcentaje suave
+        total_progress = total_files * 100 if total_files > 0 else 100
+        progress_store[folder_id] = {"progress": 0, "total": total_progress, "message": f"Se encontraron {total_files} archivos"}
+        print(f"BACKGROUND TASK: Total de archivos detectados = {total_files}", flush=True)
+        if total_files == 0:
             print("BACKGROUND TASK: Abortando porque no hay archivos", flush=True)
             rabbitmq_service.publish_progress(
                 user_id="admin",
@@ -102,19 +104,12 @@ def process_folder_background(folder_id: str, access_token: str):
         for i, file_info in enumerate(files):
             file_id = file_info.get("id")
             file_name = file_info.get("name")
-            
-            rabbitmq_service.publish_progress(
-                user_id="admin",
-                type_event="sync_progress",
-                progress=i,
-                total=total,
-                message=f"Vectorizando {file_name}..."
-            )
+            base_progress = i * 100
             
             progress_store[folder_id] = {
-                "progress": i,
-                "total": total,
-                "message": f"Vectorizando {file_name}..."
+                "progress": base_progress + 5, # 5% Descargando
+                "total": total_progress,
+                "message": f"Descargando {file_name}..."
             }
             
             try:
@@ -122,11 +117,41 @@ def process_folder_background(folder_id: str, access_token: str):
                 if not text or not nlp_service.is_valid_project(text):
                     continue
                 
+                progress_store[folder_id] = {
+                    "progress": base_progress + 10, # 10% Procesando NLP
+                    "total": total_progress,
+                    "message": f"Estructurando NLP de {file_name}..."
+                }
+                
                 clean_text = nlp_service.strip_structure(text)
                 safe_text = nlp_service.anonymize_pii(clean_text)
-                
                 chunks = nlp_service.chunk_text(safe_text)
-                embeddings = nlp_service.vectorize(chunks)
+                total_chunks = len(chunks)
+                
+                # Vectorizamos por lotes para que la barra de carga avance
+                embeddings = []
+                batch_size = 15
+                for j in range(0, total_chunks, batch_size):
+                    batch = chunks[j:j+batch_size]
+                    
+                    # Calcular subprogreso (del 10% al 90% para la vectorización)
+                    fraction = (j / total_chunks) if total_chunks > 0 else 1
+                    sub_progress = int(10 + (fraction * 80))
+                    
+                    progress_store[folder_id] = {
+                        "progress": base_progress + sub_progress,
+                        "total": total_progress,
+                        "message": f"Vectorizando {file_name} ({j}/{total_chunks} fragmentos)"
+                    }
+                    
+                    batch_embeddings = nlp_service.vectorize(batch)
+                    embeddings.extend(batch_embeddings)
+                
+                progress_store[folder_id] = {
+                    "progress": base_progress + 95, # 95% Guardando
+                    "total": total_progress,
+                    "message": f"Indexando {file_name} en Base Vectorial..."
+                }
                 
                 project_id = file_name.replace(".pdf", "").replace(".PDF", "").strip().lower()
                 url_drive = f"https://drive.google.com/file/d/{file_id}/view"
@@ -142,17 +167,9 @@ def process_folder_background(folder_id: str, access_token: str):
                 print(f"❌ Error procesando {file_name}: {e}", flush=True)
                 continue
                 
-        rabbitmq_service.publish_progress(
-            user_id="admin",
-            type_event="sync_complete",
-            progress=total,
-            total=total,
-            message="Sincronización de Océanos Azules completada."
-        )
-        
         progress_store[folder_id] = {
-            "progress": total,
-            "total": total,
+            "progress": total_progress,
+            "total": total_progress,
             "message": "¡Sincronización completada!"
         }
         
