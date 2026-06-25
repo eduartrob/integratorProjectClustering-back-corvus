@@ -22,7 +22,8 @@ class RabbitMQService:
             )
             parameters = pika.ConnectionParameters(
                 host=os.getenv('RABBITMQ_HOST', 'rabbitmq'),
-                credentials=credentials
+                credentials=credentials,
+                heartbeat=0  # Deshabilitamos heartbeats para que RabbitMQ no cierre la conexión si el backend está inactivo
             )
             self.connection = pika.BlockingConnection(parameters)
             self.channel = self.connection.channel()
@@ -31,7 +32,7 @@ class RabbitMQService:
         except Exception as e:
             logger.error(f"❌ Error conectando a RabbitMQ: {str(e)}")
 
-    def publish_progress(self, user_id: str, type_event: str, progress: int, total: int, message: str):
+    def publish_progress(self, user_id: str, type_event: str, progress: int, total: int, message: str, retry: bool = True):
         if not self.channel or self.connection.is_closed:
             self._connect()
             
@@ -45,7 +46,6 @@ class RabbitMQService:
                     "message": message
                 }
                 
-                # El microservicio de notificaciones escuchará 'sync.progress'
                 routing_key = 'sync.progress'
                 self.channel.basic_publish(
                     exchange=self.exchange,
@@ -57,5 +57,10 @@ class RabbitMQService:
                 )
             except Exception as e:
                 logger.error(f"Error publicando mensaje en RabbitMQ: {str(e)}")
+                # Si la conexión se perdió sin que Pika se diera cuenta, reconectamos y reintentamos 1 vez
+                if retry:
+                    logger.info("Intentando reconectar a RabbitMQ y reenviar mensaje...")
+                    self._connect()
+                    self.publish_progress(user_id, type_event, progress, total, message, retry=False)
 
 rabbitmq_service = RabbitMQService()
