@@ -126,8 +126,9 @@ async def process_folder_background(folder_id: str, access_token: str):
                     embeddings=embeddings,
                     url_drive=url_drive
                 )
+                print(f"✅ Vectorizado y guardado: {project_id} ({len(chunks)} chunks)", flush=True)
             except Exception as e:
-                print(f"Error procesando {file_name}: {e}")
+                print(f"❌ Error procesando {file_name}: {e}", flush=True)
                 continue
                 
         rabbitmq_service.publish_progress(
