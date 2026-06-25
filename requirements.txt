@@ -17,6 +17,7 @@ pdfplumber>=0.10.3
 # NLP & Vectorización
 spacy>=3.7.2
 sentence-transformers>=2.2.2
+transformers==4.38.2
 
 # Base de Datos Vectorial
 chromadb>=0.4.18

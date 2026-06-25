@@ -84,10 +84,10 @@ async def process_folder_background(folder_id: str, access_token: str):
         if total == 0:
             rabbitmq_service.publish_progress(
                 user_id="admin",
-                type_event="sync_error",
-                progress=0,
-                total=0,
-                message="No se encontraron PDFs en la carpeta."
+                type_event="sync_complete",
+                progress=100,
+                total=100,
+                message="Carpeta vinculada (0 PDFs encontrados)."
             )
             return
 
