@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     CHROMA_DB_PATH: str = "./chroma_data"
     POSTGRES_DB_URL: str = "postgresql://postgres:postgres@localhost:5433/corvus_clustering_integrator_db"
     
+    # Microservicios
+    AUTH_SERVICE_URL: str = "http://localhost:3001"
+    
     # Modelos IA
     MODELS_DIR: str = "./app/models"
 

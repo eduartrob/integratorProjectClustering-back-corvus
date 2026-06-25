@@ -149,8 +149,26 @@ async def process_folder(request: ProcessFolderRequest, background_tasks: Backgr
     """
     Inicia la sincronización asíncrona de una carpeta entera de Google Drive.
     """
+    try:
+        import requests
+        from app.core.config import settings
+        
+        # Validar si ya está sincronizada internamente llamando al Auth Service
+        auth_url = f"{settings.AUTH_SERVICE_URL}/folders/check/{request.folder_id}"
+        response = requests.get(auth_url, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("exists") is True:
+                # Si ya existe, retornamos inmediatamente y NO iniciamos la tarea asíncrona
+                return {"message": "La carpeta ya se encuentra sincronizada.", "sync_skipped": True}
+                
+    except Exception as e:
+        print(f"Error verificando carpeta con Auth Service: {e}")
+        # Si falla el servicio, continuamos con el flujo normal para no bloquear
+
     background_tasks.add_task(process_folder_background, request.folder_id, request.access_token)
-    return {"message": "Sincronización iniciada en segundo plano."}
+    return {"message": "Sincronización iniciada en segundo plano.", "sync_skipped": False}
 
 @router.post("/process-local-project")
 async def process_local_project_document(project_id: str, file: UploadFile = File(...)):
