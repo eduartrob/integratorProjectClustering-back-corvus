@@ -107,9 +107,9 @@ def process_folder_background(folder_id: str, access_token: str):
             base_progress = i * 100
             
             progress_store[folder_id] = {
-                "progress": base_progress + 5, # 5% Descargando
+                "progress": base_progress + 5,
                 "total": total_progress,
-                "message": f"Descargando {file_name}..."
+                "message": f"[{i+1}/{total_files}] Descargando {file_name}..."
             }
             
             try:
@@ -118,9 +118,9 @@ def process_folder_background(folder_id: str, access_token: str):
                     continue
                 
                 progress_store[folder_id] = {
-                    "progress": base_progress + 10, # 10% Procesando NLP
+                    "progress": base_progress + 10,
                     "total": total_progress,
-                    "message": f"Estructurando NLP de {file_name}..."
+                    "message": f"[{i+1}/{total_files}] Estructurando NLP de {file_name}..."
                 }
                 
                 clean_text = nlp_service.strip_structure(text)
@@ -128,29 +128,28 @@ def process_folder_background(folder_id: str, access_token: str):
                 chunks = nlp_service.chunk_text(safe_text)
                 total_chunks = len(chunks)
                 
-                # Vectorizamos por lotes para que la barra de carga avance
+                # Vectorizamos en lotes muy pequeños para que el móvil reciba actualizaciones súper rápidas
                 embeddings = []
-                batch_size = 15
+                batch_size = 2
                 for j in range(0, total_chunks, batch_size):
                     batch = chunks[j:j+batch_size]
                     
-                    # Calcular subprogreso (del 10% al 90% para la vectorización)
                     fraction = (j / total_chunks) if total_chunks > 0 else 1
                     sub_progress = int(10 + (fraction * 80))
                     
                     progress_store[folder_id] = {
                         "progress": base_progress + sub_progress,
                         "total": total_progress,
-                        "message": f"Vectorizando {file_name} ({j}/{total_chunks} fragmentos)"
+                        "message": f"[{i+1}/{total_files}] Vectorizando: {j}/{total_chunks} fragmentos"
                     }
                     
                     batch_embeddings = nlp_service.vectorize(batch)
                     embeddings.extend(batch_embeddings)
                 
                 progress_store[folder_id] = {
-                    "progress": base_progress + 95, # 95% Guardando
+                    "progress": base_progress + 95,
                     "total": total_progress,
-                    "message": f"Indexando {file_name} en Base Vectorial..."
+                    "message": f"[{i+1}/{total_files}] Indexando en ChromaDB..."
                 }
                 
                 project_id = file_name.replace(".pdf", "").replace(".PDF", "").strip().lower()
