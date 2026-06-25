@@ -86,8 +86,10 @@ def process_folder_background(folder_id: str, access_token: str):
     try:
         files = drive_service.get_files_in_folder(folder_id, access_token)
         total_files = len(files)
+        # Escala de 100 puntos por archivo para máxima fluidez
+        total_progress = total_files * 100 if total_files > 0 else 100
         
-        progress_store[folder_id] = {"progress": 0, "total": 100, "message": f"Se encontraron {total_files} archivos"}
+        progress_store[folder_id] = {"progress": 0, "total": total_progress, "message": f"Se encontraron {total_files} archivos"}
         print(f"BACKGROUND TASK: Total de archivos detectados = {total_files}", flush=True)
         if total_files == 0:
             print("BACKGROUND TASK: Abortando porque no hay archivos", flush=True)
@@ -103,14 +105,12 @@ def process_folder_background(folder_id: str, access_token: str):
         for i, file_info in enumerate(files):
             file_id = file_info.get("id")
             file_name = file_info.get("name")
-            
-            # Matemáticas directas: Qué porcentaje llevamos completado
-            current_percentage = int((i / total_files) * 100)
+            base_progress = i * 100
             
             progress_store[folder_id] = {
-                "progress": current_percentage,
-                "total": 100,
-                "message": f"[{i+1}/{total_files}] Procesando {file_name}..."
+                "progress": base_progress + 5,
+                "total": total_progress,
+                "message": f"[{i+1}/{total_files}] Descargando {file_name}..."
             }
             
             try:
@@ -120,11 +120,38 @@ def process_folder_background(folder_id: str, access_token: str):
                 
                 clean_text = nlp_service.strip_structure(text)
                 safe_text = nlp_service.anonymize_pii(clean_text)
-                
                 chunks = nlp_service.chunk_text(safe_text)
+                total_chunks = len(chunks)
                 
-                # Volvemos a la vectorización original sin lotes
-                embeddings = nlp_service.vectorize(chunks)
+                # VECTORIZACIÓN POR LOTES (No altera el resultado de la IA)
+                # El modelo procesa 3 fragmentos, los guarda, luego otros 3, etc.
+                # Al final, se unen en la misma lista exacta como si fuera de un jalón.
+                embeddings = []
+                batch_size = 3
+                for j in range(0, total_chunks, batch_size):
+                    batch = chunks[j:j+batch_size]
+                    
+                    fraction = (j / total_chunks) if total_chunks > 0 else 1
+                    sub_progress = int(10 + (fraction * 80))
+                    
+                    progress_store[folder_id] = {
+                        "progress": base_progress + sub_progress,
+                        "total": total_progress,
+                        "message": f"[{i+1}/{total_files}] Vectorizando: {j}/{total_chunks} fragmentos"
+                    }
+                    
+                    # Llamamos a tu misma función de IA, solo que con pedazos más chicos
+                    batch_embeddings = nlp_service.vectorize(batch)
+                    embeddings.extend(batch_embeddings)
+                
+                # Al salir del bucle, la variable 'embeddings' tiene exactamente los mismos 
+                # datos matemáticos que si lo hubieras corrido todo junto. ¡100% seguro!
+                
+                progress_store[folder_id] = {
+                    "progress": base_progress + 95,
+                    "total": total_progress,
+                    "message": f"[{i+1}/{total_files}] Guardando proyecto en BD..."
+                }
                 
                 project_id = file_name.replace(".pdf", "").replace(".PDF", "").strip().lower()
                 url_drive = f"https://drive.google.com/file/d/{file_id}/view"
@@ -141,8 +168,8 @@ def process_folder_background(folder_id: str, access_token: str):
                 continue
                 
         progress_store[folder_id] = {
-            "progress": 100,
-            "total": 100,
+            "progress": total_progress,
+            "total": total_progress,
             "message": "¡Sincronización completada!"
         }
         
