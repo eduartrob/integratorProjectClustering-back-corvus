@@ -23,7 +23,7 @@ transformers==4.38.2
 chromadb>=0.4.18
 
 # Matemáticas y Clustering
-numpy>=1.26.2
+numpy<2.0.0
 pandas>=2.1.3
 scikit-learn>=1.3.2
 
