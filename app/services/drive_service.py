@@ -70,6 +70,7 @@ class DriveService:
         Retorna lista de diccionarios: [{"id": "...", "name": "..."}]
         """
         try:
+            print(f"Iniciando búsqueda en Drive para la carpeta: {folder_id}", flush=True)
             service = self.get_drive_service(access_token)
             query = f"'{folder_id}' in parents and mimeType='application/pdf' and trashed=false"
             
@@ -80,10 +81,12 @@ class DriveService:
             ).execute()
             
             files = results.get('files', [])
-            logger.info(f"Se encontraron {len(files)} PDFs en la carpeta {folder_id}")
+            print(f"Se encontraron {len(files)} PDFs en la carpeta {folder_id}", flush=True)
             return files
         except Exception as e:
-            logger.error(f"Error listando archivos en la carpeta {folder_id}: {str(e)}")
+            print(f"Error crítico en Google Drive listando archivos: {str(e)}", flush=True)
+            import traceback
+            traceback.print_exc()
             return []
 
 drive_service = DriveService()

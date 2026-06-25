@@ -78,10 +78,13 @@ async def process_project_document(request: ProcessProjectRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 async def process_folder_background(folder_id: str, access_token: str):
+    print(f"================ INICIANDO TAREA DE BACKGROUND PARA FOLDER {folder_id} ================", flush=True)
     try:
         files = drive_service.get_files_in_folder(folder_id, access_token)
         total = len(files)
+        print(f"BACKGROUND TASK: Total de archivos detectados = {total}", flush=True)
         if total == 0:
+            print("BACKGROUND TASK: Abortando porque no hay archivos", flush=True)
             rabbitmq_service.publish_progress(
                 user_id="admin",
                 type_event="sync_complete",
