@@ -1,7 +1,12 @@
 import spacy
 import re
+import torch
 from sentence_transformers import SentenceTransformer
 import logging
+
+# Limitar PyTorch a 1 hilo de CPU para no "ahorcar" al servidor AWS
+# y permitir que FastAPI responda rápidamente al polling de progreso del celular.
+torch.set_num_threads(1)
 
 logger = logging.getLogger(__name__)
 
