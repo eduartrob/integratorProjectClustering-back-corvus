@@ -26,10 +26,14 @@ class OllamaService:
             sim_pct = proj.get('similarity_pct', 0)
             context_text += f"\n--- Proyecto Existente {i+1} ---\nTítulo: {proj.get('title', 'Desconocido')}\nSimilitud Matemática (ChromaDB): {sim_pct:.1f}%\nContenido: {proj.get('content', '')}\n"
 
-        prompt = f"""Eres un estricto comité evaluador de proyectos universitarios.
+        prompt = f"""Eres un estricto comité evaluador de proyectos universitarios en un sistema de IA avanzado (AcadeRAG).
 Tu tarea PRINCIPAL es EVALUAR EXCLUSIVAMENTE la "NUEVA PROPUESTA". 
-El "HISTORIAL DE PROYECTOS SIMILARES" se te proporciona ÚNICAMENTE como referencia para que busques si hay plagio o colisión. ¡NO evalúes ni des recomendaciones sobre el historial!
-ATENCIÓN: Si el historial muestra un proyecto con una Similitud Matemática (ChromaDB) superior al 90%, SIGNIFICA QUE ES UNA COPIA CASI EXACTA O PARÁFRASIS. Debes rechazarlo inmediatamente por colisión y darle un innovation_index de 0.
+El "HISTORIAL DE PROYECTOS SIMILARES" se te proporciona ÚNICAMENTE como referencia para que busques si hay plagio o colisión semántica. ¡NO evalúes ni des recomendaciones sobre el historial!
+
+REGLAS DE ANÁLISIS DE COLISIÓN (HISTORIAL): 
+- Si un proyecto del historial tiene una Similitud Matemática (ChromaDB) > 50% y la idea central es idéntica, emite una "Alerta Roja".
+- Si la similitud matemática es moderada (20-50%) pero aplican la tecnología a sectores distintos o con diferenciadores claros, emite una "Falsa Alarma". Si les falta diferenciarse, emite "Alerta Amarilla".
+- Si un proyecto supera el 90% de similitud, asúmelo como plagio/copia, asigna un innovation_index score de 0 y Rechaza (approved: false).
 
 --- INICIO DE LA NUEVA PROPUESTA A EVALUAR (CONCÉNTRATE EN ESTO) ---
 {proposal_text}
@@ -39,25 +43,31 @@ ATENCIÓN: Si el historial muestra un proyecto con una Similitud Matemática (Ch
 {context_text}
 --- FIN DEL HISTORIAL ---
 
-INSTRUCCIONES FINALES:
-Basándote EXCLUSIVAMENTE en la "NUEVA PROPUESTA", y comparándola con el "HISTORIAL" para buscar similitudes, genera tu evaluación.
-Tu única salida debe ser un documento JSON estrictamente formateado, sin texto adicional fuera del JSON.
-Debes retornar EXACTAMENTE esta estructura JSON:
+INSTRUCCIONES FINALES DE ESTRUCTURA JSON:
+Tu salida debe ser ÚNICA y EXCLUSIVAMENTE un documento JSON válido, sin ningún texto Markdown ni comentarios fuera de él. El JSON llenará un Dashboard UI.
+Respeta EXACTAMENTE esta estructura y sigue las reglas para cada campo:
 {{
-  "innovation_index": <número del 0 al 100 indicando qué tan original es la NUEVA PROPUESTA>,
-  "quality_metrics": {{
-    "academic_rigor": <número 0-100>,
-    "technical_relevance": <número 0-100>,
-    "structural_clarity": <número 0-100>
+  "innovation_index": {{
+    "score": <número 0-100>,
+    "label": "<Usa exactamente una de estas: Excepcional | Muy Bueno | Aceptable | Tradicional>"
   }},
-  "semantic_collision_risk": "<Texto breve describiendo si la NUEVA PROPUESTA se parece mucho a un proyecto específico del historial>",
+  "quality_metrics": {{
+    "academic_rigor": <número 0-100 evaluando citas y referencias>,
+    "technical_relevance": <número 0-100 evaluando la modernidad de la tecnología propuesta>,
+    "structural_clarity": <número 0-100 evaluando la redacción y organización>
+  }},
+  "semantic_collision_risk": {{
+    "alert_type": "<Usa exactamente una de estas: Alerta Roja | Alerta Amarilla | Falsa Alarma>",
+    "explanation": "<Análisis humano leyendo ambos proyectos. Explica a detalle por qué chocan o por qué es original. Si no hay historial similar, indica originalidad alta.>"
+  }},
   "recommendations": [
     {{
-      "title": "<Título corto de qué mejorar en la NUEVA PROPUESTA>",
-      "description": "<Explicación detallada de qué mejorar>"
+      "icon": "<Usa exactamente uno de estos identificadores de Material Symbols: code, lock, fact_check, architecture, library_books>",
+      "title": "<Título accionable (ej. Actualizar stack tecnológico)>",
+      "description": "<Instrucción experta, técnica y específica sobre cómo mejorar (entre 2 y 3 oraciones).>"
     }}
   ],
-  "verdict": "<Aprobado por originalidad / Requiere cambios / Rechazado por colisión>",
+  "verdict": "<Breve resumen del dictamen>",
   "approved": <booleano true o false>
 }}
 """
