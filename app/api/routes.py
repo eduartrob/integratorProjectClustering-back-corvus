@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks, Form
 from pydantic import BaseModel
 from typing import List
 import fitz
@@ -151,7 +151,7 @@ def process_folder_background(folder_id: str, access_token: str, user_id: str):
         }
 
 @router.post("/process-folder", status_code=202)
-async def process_folder(request: ProcessFolderRequest, background_tasks: BackgroundTasks):
+async def process_folder(request: ProcessFolderRequest, background_tasks: BackgroundTasks, Form):
     """
     Inicia la sincronización asíncrona de una carpeta entera de Google Drive.
     """
@@ -392,6 +392,222 @@ async def populate_from_local_folder(x_api_key: str = Header(default=None)):
         "total_archivos_intentados": len(results),
         "resultados": results
     }
+
+# Asegurar que existe el directorio de drafts
+DRAFTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "drafts")
+os.makedirs(DRAFTS_DIR, exist_ok=True)
+
+@router.post("/pre-validate-proposal")
+async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = File(...)):
+    """
+    Realiza una validación RÁPIDA y GUARDA un borrador local.
+    """
+    try:
+        filename_lower = file.filename.lower()
+        if not filename_lower.endswith(('.pdf', '.md', '.txt')):
+            raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
+            
+        file_bytes = await file.read()
+        full_text = ""
+        if filename_lower.endswith('.pdf'):
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            full_text = pymupdf4llm.to_markdown(doc)
+        else:
+            full_text = file_bytes.decode('utf-8')
+                    
+        if not full_text:
+            raise HTTPException(status_code=400, detail="No se pudo extraer texto del documento.")
+
+        if nlp_service.detect_prompt_injection(full_text):
+            raise HTTPException(status_code=403, detail="ALERTA: Se detectó un intento de inyección de prompt.")
+
+        clean_text = nlp_service.strip_structure(full_text)
+        clean_text = nlp_service.normalize_homoglyphs(clean_text)
+        safe_text = nlp_service.anonymize_pii(clean_text)
+
+        chunks = nlp_service.chunk_text(safe_text)
+        embeddings = nlp_service.vectorize(chunks)
+        
+        if not embeddings:
+            raise HTTPException(status_code=400, detail="El documento no tiene contenido suficiente.")
+        
+        query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
+        search_results = chroma_service.search_similar_multi(query_embeddings=query_subset, n_results=3)
+        
+        max_similitud_pct = 0.0
+        similar_projects = []
+        if search_results and "documents" in search_results and search_results["documents"]:
+            grouped_projects = {}
+            for q_idx in range(len(search_results["documents"])):
+                docs = search_results["documents"][q_idx]
+                metas = search_results["metadatas"][q_idx]
+                distances = search_results["distances"][q_idx] if "distances" in search_results else [0]*len(docs)
+                
+                for doc, meta, dist in zip(docs, metas, distances):
+                    p_id = meta.get("project_id", "Desconocido")
+                    if p_id not in grouped_projects:
+                        grouped_projects[p_id] = {"chunks": [], "min_distance": float('inf')}
+                    if doc not in grouped_projects[p_id]["chunks"]:
+                        grouped_projects[p_id]["chunks"].append(doc)
+                    if dist < grouped_projects[p_id]["min_distance"]:
+                        grouped_projects[p_id]["min_distance"] = dist
+            
+            sorted_projects = sorted(grouped_projects.items(), key=lambda x: x[1]["min_distance"])[:3]
+            for p_id, p_data in sorted_projects:
+                dist = p_data["min_distance"]
+                similitud_pct = max(0, min(100, (1.0 - dist) * 100))
+                if similitud_pct > max_similitud_pct:
+                    max_similitud_pct = similitud_pct
+                similar_projects.append({
+                    "title": p_id.upper(),
+                    "content": " ".join(p_data["chunks"][:3]),
+                    "similarity_pct": similitud_pct
+                })
+
+        # Heurística de Alineación Académica y Mensajes Dinámicos
+        words_count = len(full_text.split())
+        academic_alignment = 40 # Base
+        areas_of_improvement = []
+        positive_feedback = []
+        
+        text_lower = full_text.lower()
+        
+        # 1. Análisis de Estructura (Longitud)
+        if words_count >= 500:
+            academic_alignment += 10
+            positive_feedback.append("Formato adecuado. La longitud del documento es óptima para una propuesta inicial.")
+        else:
+            areas_of_improvement.append("El documento tiene menos de 500 palabras. Te sugerimos expandir tu marco teórico y estado del arte.")
+            
+        # Análisis de Estructura (Secciones Básicas)
+        has_intro = "introducción" in text_lower or "introduccion" in text_lower
+        has_method = "metodología" in text_lower or "metodologia" in text_lower
+        has_biblio = "bibliografía" in text_lower or "referencias" in text_lower
+        
+        if has_intro and has_method and has_biblio:
+            academic_alignment += 15
+            positive_feedback.append("Estructura impecable. Las secciones clave (Introducción, Metodología, Bibliografía) están presentes.")
+            
+        if not ("conclusiones" in text_lower or "resultados esperados" in text_lower):
+            areas_of_improvement.append("No se detectó un apartado de 'Conclusiones' o 'Resultados esperados'.")
+            
+        if not ("resumen" in text_lower or "abstract" in text_lower):
+            areas_of_improvement.append("Falta el 'Resumen' o 'Abstract' al inicio de tu documento.")
+            
+        if not ("objetivo" in text_lower):
+            areas_of_improvement.append("No se encontró una sección explícita de 'Objetivos'. Recuerda definir tu Objetivo General y Específicos.")
+        else:
+            academic_alignment += 10
+            
+        # 2. Análisis de Rigor Académico (Citas)
+        if has_biblio:
+            academic_alignment += 15
+        else:
+            areas_of_improvement.append("No se detectó la sección de 'Bibliografía'. Una propuesta sin sustento teórico puede ser rechazada.")
+            
+        import re
+        citas = re.findall(r'\[\d+\]|\(\w+,\s*\d{4}\)', full_text)
+        if len(citas) < 2 and not has_biblio:
+            areas_of_improvement.append("Se detectaron pocas menciones bibliográficas en el texto. Recuerda citar tus fuentes (APA/IEEE) en el marco teórico.")
+
+        # 3. Riesgo de Colisión (Histórico)
+        collision_risk_level = "Bajo"
+        
+        if max_similitud_pct > 50:
+            collision_risk_level = "Alto"
+            top_project = similar_projects[0]["title"].replace("PROYECTO_", "") if similar_projects else "otro proyecto"
+            areas_of_improvement.insert(0, f"Riesgo de colisión alto ({round(max_similitud_pct)}%). La idea central coincide fuertemente con el proyecto '{top_project}' de la generación anterior. ¡Cuidado con el plagio!")
+        elif max_similitud_pct > 20:
+            collision_risk_level = "Medio"
+            areas_of_improvement.insert(0, "Similitud moderada. Tu proyecto comparte tecnologías o metodologías con propuestas del semestre pasado. Asegúrate de destacar tu diferenciador.")
+        else:
+            collision_risk_level = "Bajo"
+            if max_similitud_pct < 5:
+                positive_feedback.insert(0, "Originalidad alta. No se encontraron proyectos similares en el repositorio histórico de la universidad.")
+            else:
+                positive_feedback.insert(0, "¡Excelente planteamiento! Tu propuesta tecnológica parece única frente a generaciones anteriores.")
+
+        quick_analysis = {
+            "status": "success",
+            "academic_alignment": min(100, academic_alignment),
+            "collision_risk_pct": round(max_similitud_pct, 1),
+            "collision_risk_level": collision_risk_level,
+            "positive_feedback": positive_feedback,
+            "areas_of_improvement": areas_of_improvement
+        }
+
+        # Guardar Draft
+        draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+        draft_data = {
+            "chunks": chunks,
+            "similar_projects": similar_projects,
+            "quick_analysis": quick_analysis
+        }
+        with open(draft_path, "w", encoding="utf-8") as f:
+            json.dump(draft_data, f, ensure_ascii=False)
+
+        return quick_analysis
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/draft-proposal/{user_id}")
+async def get_draft_proposal(user_id: str):
+    draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+    if os.path.exists(draft_path):
+        try:
+            with open(draft_path, "r", encoding="utf-8") as f:
+                draft_data = json.load(f)
+            return draft_data.get("quick_analysis", {})
+        except:
+            return {"status": "not_found"}
+    return {"status": "not_found"}
+
+@router.post("/analyze-draft-proposal")
+async def analyze_draft_proposal(user_id: str = Form(...)):
+    draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+    if not os.path.exists(draft_path):
+        raise HTTPException(status_code=404, detail="No se encontró borrador para este usuario.")
+        
+    try:
+        with open(draft_path, "r", encoding="utf-8") as f:
+            draft_data = json.load(f)
+            
+        chunks = draft_data.get("chunks", [])
+        similar_projects = draft_data.get("similar_projects", [])
+        proposal_text = " ".join(chunks)
+        
+        if not ollama_service.check_health():
+             return {
+                 "status": "warning",
+                 "message": "Ollama no está respondiendo en localhost:11434.",
+                 "similar_projects": [p["title"] for p in similar_projects]
+             }
+
+        llm_verdict = ollama_service.analyze_originality(
+            proposal_text=proposal_text,
+            similar_projects=similar_projects
+        )
+
+        # Eliminar borrador tras éxito
+        try:
+            os.remove(draft_path)
+        except:
+            pass
+
+        return {
+            "status": "success",
+            "message": "Análisis completado con Phi-3 Mini",
+            "similar_projects_found": len(similar_projects),
+            "ollama_analysis": llm_verdict
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/analyze-proposal-phi3")
 async def analyze_proposal_phi3(file: UploadFile = File(...)):
