@@ -16,12 +16,12 @@ pymupdf4llm>=0.0.17
 
 # Forzar versión CPU de PyTorch para ahorrar 3GB+ de disco duro (NVIDIA CUDA)
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch
+torch==2.2.2+cpu
 
 # NLP & Vectorización
 spacy>=3.7.2
-sentence-transformers>=2.2.2
-transformers
+sentence-transformers==3.3.1
+transformers>=4.45.0,<4.53.0
 # Base de Datos Vectorial
 chromadb>=0.4.18
 
