@@ -38,12 +38,12 @@ class ChromaService:
             metadatas=metadatas
         )
 
-    def search_similar(self, query_embedding: list[float], n_results: int = 5):
+    def search_similar_multi(self, query_embeddings: list[list[float]], n_results: int = 5):
         """
-        Busca los proyectos más similares en el espacio vectorial (potencial plagio o afinidad).
+        Realiza una búsqueda multi-query con varios fragmentos a la vez.
         """
         results = self.collection.query(
-            query_embeddings=[query_embedding],
+            query_embeddings=query_embeddings,
             n_results=n_results
         )
         return results

@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 class NLPService:
     def __init__(self):
-        logger.info("Cargando modelo SentenceTransformer: all-MiniLM-L6-v2...")
-        # Este modelo pesa ~90MB y generará vectores de 384 dimensiones
-        self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
+        logger.info("Cargando modelo SentenceTransformer: paraphrase-multilingual-MiniLM-L12-v2...")
+        # Este modelo es multilingüe nativo, ideal para español, pesa ~470MB y genera vectores de 384 dimensiones
+        self.encoder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
         
         logger.info("Cargando modelo de Spacy para español...")
         try:
@@ -158,8 +158,7 @@ class NLPService:
         patterns = [
             r"ignora.*instrucciones",
             r"olvida.*anterior",
-            r"act[uú]a como",
-            r"eres un bot",
+            r"(?i)\b(act[uú]a como|eres un bot)\b(?!\s+(sinodal|sistema|plataforma|herramienta))",
             r"innovation_index",
             r"approved:\s*true",
             r"system prompt"
@@ -185,36 +184,48 @@ class NLPService:
 
     def chunk_text(self, text: str, max_words: int = 150) -> list[str]:
         """
-        Divide un texto largo en pequeños fragmentos (chunks) con sentido semántico.
-        Usa Spacy para detectar las oraciones.
+        Divide el texto en pequeños fragmentos (chunks) usando cortes de Markdown (# Títulos)
+        para preservar la semántica estructural perfecta, y subdivide si la sección es muy larga.
         """
         if not text or not text.strip():
             return []
 
-        if self.nlp is None:
-            # Fallback muy básico si Spacy falla
-            return [text[i:i+500] for i in range(0, len(text), 500)]
-
-        doc = self.nlp(text)
         chunks = []
-        current_chunk = []
-        current_word_count = 0
+        # Expresión regular para separar el texto cada vez que haya un Título Markdown o tabla grande
+        # Separamos por saltos seguidos de # o saltos bruscos.
+        sections = re.split(r'\n(?=#+ )', text)
 
-        for sent in doc.sents:
-            words_in_sent = len(sent)
-            # Si añadir esta oración supera el límite, guardamos el chunk actual y empezamos otro
-            if current_word_count + words_in_sent > max_words and current_chunk:
-                chunks.append(" ".join(current_chunk))
-                current_chunk = []
-                current_word_count = 0
-            
-            current_chunk.append(sent.text.strip())
-            current_word_count += words_in_sent
-        
-        # Guardar el sobrante
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
-            
+        for section in sections:
+            section = section.strip()
+            if not section:
+                continue
+                
+            # Contamos las palabras de la sección
+            words = section.split()
+            if len(words) <= max_words:
+                chunks.append(section)
+            else:
+                # Si la sección (ej. toda la metodología) es gigante, usamos Spacy para partirla
+                # de manera suave sin romper oraciones.
+                if self.nlp is None:
+                    # Fallback sin Spacy
+                    for i in range(0, len(words), max_words):
+                        chunks.append(" ".join(words[i:i+max_words]))
+                else:
+                    doc = self.nlp(section)
+                    current_chunk = []
+                    current_count = 0
+                    for sent in doc.sents:
+                        w_count = len(sent)
+                        if current_count + w_count > max_words and current_chunk:
+                            chunks.append(" ".join(current_chunk))
+                            current_chunk = []
+                            current_count = 0
+                        current_chunk.append(sent.text.strip())
+                        current_count += w_count
+                    if current_chunk:
+                        chunks.append(" ".join(current_chunk))
+
         return chunks
 
     def vectorize(self, texts: list[str]) -> list[list[float]]:

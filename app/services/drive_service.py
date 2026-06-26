@@ -1,6 +1,7 @@
 import io
 import logging
-import pdfplumber
+import fitz
+import pymupdf4llm
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
@@ -43,17 +44,16 @@ class DriveService:
     def extract_text_from_stream(self, file_stream: io.BytesIO, file_name: str) -> str:
         """
         Lee el archivo desde la memoria RAM y extrae todo su texto.
-        Soporta PDFs usando pdfplumber y Markdown/Text decodificando UTF-8.
+        Soporta PDFs usando pymupdf4llm (Markdown estructurado) y Text decodificando UTF-8.
         """
         full_text = ""
         try:
             name_lower = file_name.lower()
             if name_lower.endswith('.pdf'):
-                with pdfplumber.open(file_stream) as pdf:
-                    for page in pdf.pages:
-                        text = page.extract_text()
-                        if text:
-                            full_text += text + "\n"
+                # Extraer Markdown estructurado en memoria usando PyMuPDF
+                file_bytes = file_stream.read()
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                full_text = pymupdf4llm.to_markdown(doc)
             elif name_lower.endswith('.md') or name_lower.endswith('.txt'):
                 full_text = file_stream.read().decode('utf-8')
             else:
