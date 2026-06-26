@@ -10,6 +10,7 @@ from app.services.nlp_service import nlp_service
 from app.services.chroma_service import chroma_service
 from app.services.cluster_logic import cluster_logic
 from app.services.rabbitmq_service import rabbitmq_service
+from app.services.ollama_service import ollama_service
 
 router = APIRouter()
 
@@ -236,23 +237,18 @@ async def get_sync_status(folder_id: str):
         return progress_store[folder_id]
     return {"progress": 0, "total": 100, "message": "Esperando inicialización..."}
 
-@router.post("/process-local-project")
-async def process_local_project_document(project_id: str, file: UploadFile = File(...)):
+@router.post("/analyze-proposal-phi3")
+async def analyze_proposal_phi3(file: UploadFile = File(...)):
     """
-    Ruta para hacer PRUEBAS LOCALES.
-    Sube un PDF desde tu computadora, lo vectoriza y lo guarda en ChromaDB.
+    Ejecuta el Pipeline de 5 Fases para Análisis de Originalidad con Ollama (Phi-3 Mini).
     """
     try:
         filename_lower = file.filename.lower()
-        valid_extensions = ('.pdf', '.md', '.txt')
-        if not filename_lower.endswith(valid_extensions):
+        if not filename_lower.endswith(('.pdf', '.md', '.txt')):
             raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
             
-        project_id = project_id.lower().strip()
-        
-        # 1. Extraer texto del archivo subido
+        # Fase 1: Ingesta y Extracción Ligera
         file_bytes = await file.read()
-        
         full_text = ""
         if filename_lower.endswith('.pdf'):
             file_stream = io.BytesIO(file_bytes)
@@ -262,78 +258,94 @@ async def process_local_project_document(project_id: str, file: UploadFile = Fil
                     if text:
                         full_text += text + "\n"
         else:
-            # Es un archivo MD o TXT
             full_text = file_bytes.decode('utf-8')
                     
         if not full_text:
-            raise HTTPException(status_code=400, detail="No se pudo extraer texto del PDF")
+            raise HTTPException(status_code=400, detail="No se pudo extraer texto del documento.")
 
-        # 1.5 Filtro de Seguridad y Privacidad
-        if not nlp_service.is_valid_project(full_text):
-            raise HTTPException(status_code=406, detail="El documento fue rechazado porque no parece ser un proyecto académico válido (Ej. Currículums, Manuales).")
-            
-        # Limpiar estructura ANTES de anonimizar para que los regex funcionen
-        # sobre texto original (bibliografía, sección info equipo, etc.)
+        # SEGURIDAD RASP: Detectar Inyección de Prompt
+        if nlp_service.detect_prompt_injection(full_text):
+            raise HTTPException(status_code=403, detail="ALERTA: Se detectó un intento de inyección de prompt (Prompt Injection). El documento ha sido rechazado.")
+
+        # Fase 2: Filtrado Estructural y Anonimización (SpaCy)
         clean_text = nlp_service.strip_structure(full_text)
+        
+        # SEGURIDAD RASP: Normalizar Homoglifos (evitar evasión vectorial con cirílico)
+        clean_text = nlp_service.normalize_homoglyphs(clean_text)
+        
         safe_text = nlp_service.anonymize_pii(clean_text)
 
-        # 2. Partir el texto con Spacy
+        # Fase 3: Vectorización y Persistencia (Embeddings)
         chunks = nlp_service.chunk_text(safe_text)
-        
-        # 3. Vectorizar con Sentence-Transformers
         embeddings = nlp_service.vectorize(chunks)
-
-        # 4. Obtener el historial existente (para comparar SIN guardar la prueba)
-        all_data = chroma_service.get_all_embeddings()
-        db_embeddings = all_data.get("embeddings")
-        db_metadatas = all_data.get("metadatas")
-        db_documents = all_data.get("documents")
-
-        if db_embeddings is None or len(db_embeddings) == 0:
-            raise HTTPException(status_code=404, detail="No hay historial en la base de datos para comparar.")
-
-        # Reconstruir el historial agrupando por proyecto
-        projects_texts = {}
-        projects_embeddings = {}
-        for i, meta in enumerate(db_metadatas):
-            p_id = meta["project_id"]
-            if p_id not in projects_texts:
-                projects_texts[p_id] = ""
-                projects_embeddings[p_id] = []
-            projects_texts[p_id] += db_documents[i] + " "
-            projects_embeddings[p_id].append(db_embeddings[i])
-
-        history_names = []
-        history_texts = []
-        history_embeddings = []
-        for p_id, text in projects_texts.items():
-            history_names.append(p_id)
-            history_texts.append(text)
-            history_embeddings.append(np.mean(projects_embeddings[p_id], axis=0).tolist())
-
-        # 5. Ejecutar análisis automático de Océano Azul SIN GUARDAR EN BD
-        new_project_text = " ".join(chunks)
-        new_project_embedding = np.mean(embeddings, axis=0).tolist()
         
-        analysis = cluster_logic.find_blue_oceans_hybrid(
-            new_project_text=new_project_text,
-            existing_texts=history_texts,
-            new_project_embedding=new_project_embedding,
-            existing_embeddings=history_embeddings,
-            existing_names=history_names
+        # Para consultar, promediamos el vector del documento completo
+        if not embeddings:
+            raise HTTPException(status_code=400, detail="El documento no tiene contenido suficiente para vectorizar.")
+        
+        query_embedding = np.mean(embeddings, axis=0).tolist()
+
+        # Fase 4: Búsqueda de Coincidencias Rápidas (K-NN en ChromaDB)
+        # Obtenemos los 3 proyectos más similares
+        search_results = chroma_service.search_similar(query_embedding=query_embedding, n_results=3)
+        
+        similar_projects = []
+        if search_results and "documents" in search_results and search_results["documents"]:
+            # search_results["documents"][0] contiene los K resultados (chunks) más cercanos
+            # Para evitar sobrecargar el prompt con miles de chunks, uniremos los textos recuperados
+            docs = search_results["documents"][0]
+            metas = search_results["metadatas"][0]
+            distances = search_results["distances"][0] if "distances" in search_results else [0]*len(docs)
+            
+            # Agrupar por project_id para pasarlos limpios al LLM
+            grouped_projects = {}
+            for doc, meta, dist in zip(docs, metas, distances):
+                p_id = meta.get("project_id", "Desconocido")
+                if p_id not in grouped_projects:
+                    grouped_projects[p_id] = {"chunks": [], "min_distance": float('inf')}
+                grouped_projects[p_id]["chunks"].append(doc)
+                if dist < grouped_projects[p_id]["min_distance"]:
+                    grouped_projects[p_id]["min_distance"] = dist
+                
+            for p_id, p_data in grouped_projects.items():
+                # En ChromaDB, distancia coseno 0.0 es idéntico, 1.0 es ortogonal.
+                # Convertimos a porcentaje de similitud aproximado
+                dist = p_data["min_distance"]
+                similitud_pct = max(0, min(100, (1.0 - dist) * 100))
+                
+                similar_projects.append({
+                    "title": p_id.upper(),
+                    "content": " ".join(p_data["chunks"]),
+                    "similarity_pct": similitud_pct
+                })
+
+        # Fase 5: Análisis de Originalidad con Phi-3 Mini (Ollama)
+        proposal_text = " ".join(chunks)
+        
+        if not ollama_service.check_health():
+             return {
+                 "status": "warning",
+                 "message": "Pipeline completado hasta Fase 4. Ollama no está respondiendo en localhost:11434.",
+                 "similar_projects": [p["title"] for p in similar_projects]
+             }
+
+        llm_verdict = ollama_service.analyze_originality(
+            proposal_text=proposal_text,
+            similar_projects=similar_projects
         )
-        
-        analysis["project_id"] = project_id
 
         return {
-            "message": "PDF de prueba analizado con éxito (No se guardó en la base de datos)",
-            "project_id": project_id,
-            "chunks_processed": len(chunks),
-            "analysis": analysis
+            "status": "success",
+            "message": "Análisis completado con Phi-3 Mini",
+            "similar_projects_found": len(similar_projects),
+            "ollama_analysis": llm_verdict
         }
+
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/blue-ocean/{project_id}")

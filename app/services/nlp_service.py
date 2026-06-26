@@ -1,6 +1,7 @@
 import spacy
 import re
 import torch
+import unicodedata
 from sentence_transformers import SentenceTransformer
 import logging
 
@@ -148,6 +149,39 @@ class NLPService:
 
         logger.debug(f"[strip_structure] Texto limpiado: {len(text)} chars")
         return text.strip()
+
+    def detect_prompt_injection(self, text: str) -> bool:
+        """
+        Retorna True si detecta patrones comunes de prompt injection.
+        """
+        text_lower = text.lower()
+        patterns = [
+            r"ignora.*instrucciones",
+            r"olvida.*anterior",
+            r"act[uú]a como",
+            r"eres un bot",
+            r"innovation_index",
+            r"approved:\s*true",
+            r"system prompt"
+        ]
+        for p in patterns:
+            if re.search(p, text_lower):
+                logger.warning(f"¡Alerta de Seguridad! Posible inyección de prompt detectada por patrón: {p}")
+                return True
+        return False
+
+    def normalize_homoglyphs(self, text: str) -> str:
+        """
+        Normaliza caracteres raros para evitar evasión vectorial (ataque de homoglifos).
+        """
+        if not text:
+            return ""
+        # Normalización Unicode NFKD separa caracteres compuestos
+        normalized = unicodedata.normalize('NFKD', text)
+        # Remover bloques de caracteres comúnmente usados para evasión (ej. Cirílico)
+        # Cirílico básico y suplementos: \u0400-\u04FF, \u0500-\u052F
+        clean_text = re.sub(r'[\u0400-\u04FF\u0500-\u052F\u2D00-\u2D2F\uA640-\uA69F]', '', normalized)
+        return clean_text
 
     def chunk_text(self, text: str, max_words: int = 150) -> list[str]:
         """
