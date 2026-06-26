@@ -4,6 +4,8 @@ from typing import List
 import fitz
 import pymupdf4llm
 import io
+import os
+import json
 import numpy as np
 
 from app.services.drive_service import drive_service
