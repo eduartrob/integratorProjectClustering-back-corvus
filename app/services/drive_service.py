@@ -1,10 +1,12 @@
 import io
 import logging
-import pdfplumber
+import fitz
+import pymupdf4llm
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from app.core.config import settings
+from app.core.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -39,39 +41,47 @@ class DriveService:
         file_stream.seek(0)
         return file_stream
 
-    def extract_text_from_pdf_stream(self, file_stream: io.BytesIO) -> str:
+    def extract_text_from_stream(self, file_stream: io.BytesIO, file_name: str) -> str:
         """
-        Lee el PDF desde la memoria RAM y extrae todo su texto usando pdfplumber.
+        Lee el archivo desde la memoria RAM y extrae todo su texto.
+        Soporta PDFs usando pymupdf4llm (Markdown estructurado) y Text decodificando UTF-8.
         """
         full_text = ""
         try:
-            with pdfplumber.open(file_stream) as pdf:
-                for page in pdf.pages:
-                    text = page.extract_text()
-                    if text:
-                        full_text += text + "\n"
+            name_lower = file_name.lower()
+            if name_lower.endswith('.pdf'):
+                # Extraer Markdown estructurado en memoria usando PyMuPDF
+                file_bytes = file_stream.read()
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                full_text = pymupdf4llm.to_markdown(doc)
+            elif name_lower.endswith('.md') or name_lower.endswith('.txt'):
+                full_text = file_stream.read().decode('utf-8')
+            else:
+                logger.warning(f"Formato no soportado para el archivo: {file_name}")
         except Exception as e:
-            logger.error(f"Error extrayendo texto del PDF: {str(e)}")
+            logger.error(f"Error extrayendo texto del archivo {file_name}: {str(e)}")
             
         return full_text
 
-    def process_drive_file(self, file_id: str, access_token: str) -> str:
+    def process_drive_file(self, file_id: str, file_name: str, access_token: str) -> str:
         """
         Orquestador: Descarga el archivo a RAM y devuelve su texto limpio.
         """
-        logger.info(f"Iniciando procesamiento en memoria para el archivo Drive: {file_id}")
-        pdf_stream = self.download_pdf_to_memory(file_id, access_token)
-        text = self.extract_text_from_pdf_stream(pdf_stream)
+        logger.info(f"Iniciando procesamiento en memoria para el archivo Drive: {file_name}")
+        file_stream = self.download_pdf_to_memory(file_id, access_token)
+        text = self.extract_text_from_stream(file_stream, file_name)
         return text
 
     def get_files_in_folder(self, folder_id: str, access_token: str) -> list:
         """
-        Obtiene la lista de archivos PDF dentro de una carpeta específica de Drive.
+        Obtiene la lista de archivos (PDF o MD) dentro de una carpeta específica de Drive.
         Retorna lista de diccionarios: [{"id": "...", "name": "..."}]
         """
         try:
+            print(f"Iniciando búsqueda en Drive para la carpeta: {folder_id}", flush=True)
             service = self.get_drive_service(access_token)
-            query = f"'{folder_id}' in parents and mimeType='application/pdf' and trashed=false"
+            # Removemos la restricción estricta de mimeType para poder capturar PDFs, MDs y TXTs.
+            query = f"'{folder_id}' in parents and trashed=false"
             
             results = service.files().list(
                 q=query,
@@ -79,11 +89,16 @@ class DriveService:
                 pageSize=100
             ).execute()
             
-            files = results.get('files', [])
-            logger.info(f"Se encontraron {len(files)} PDFs en la carpeta {folder_id}")
+            # Filtramos localmente para asegurar flexibilidad usando la configuración
+            allowed_exts = config_manager.get_allowed_extensions()
+            all_files = results.get('files', [])
+            files = [f for f in all_files if f.get('name', '').lower().endswith(allowed_exts)]
+            print(f"Se encontraron {len(files)} PDFs en la carpeta {folder_id}", flush=True)
             return files
         except Exception as e:
-            logger.error(f"Error listando archivos en la carpeta {folder_id}: {str(e)}")
+            print(f"Error crítico en Google Drive listando archivos: {str(e)}", flush=True)
+            import traceback
+            traceback.print_exc()
             return []
 
 drive_service = DriveService()

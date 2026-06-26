@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel
 from typing import List
-import pdfplumber
+import fitz
+import pymupdf4llm
 import io
 import numpy as np
 
@@ -10,109 +11,97 @@ from app.services.nlp_service import nlp_service
 from app.services.chroma_service import chroma_service
 from app.services.cluster_logic import cluster_logic
 from app.services.rabbitmq_service import rabbitmq_service
+from app.services.ollama_service import ollama_service
 
 router = APIRouter()
 
-class ProcessProjectRequest(BaseModel):
-    project_id: str
-    drive_file_id: str
-    access_token: str # En producción esto vendría en los headers, lo dejamos aquí por practicidad ahora.
-    url_drive: str
+# Global in-memory store for sync progress polling
+progress_store = {}
+
+
 
 class ProcessFolderRequest(BaseModel):
     folder_id: str
     access_token: str
+    user_id: str
 
 @router.get("/health")
 async def health_check():
     return {"status": "ok", "service": "integratorProjectClustering"}
 
-@router.post("/process-project")
-async def process_project_document(request: ProcessProjectRequest):
-    """
-    Ruta Principal de Minería (Según tu diagrama):
-    Descarga el PDF, lo parte, lo vectoriza y lo guarda en ChromaDB.
-    """
-    try:
-        request.project_id = request.project_id.lower().strip()
-        # 1. Extraer texto desde Google Drive a RAM
-        text = drive_service.process_drive_file(request.drive_file_id, request.access_token)
-        if not text:
-            raise HTTPException(status_code=400, detail="No se pudo extraer texto del PDF")
 
-        # 1.5 Filtro de Seguridad y Privacidad
-        if not nlp_service.is_valid_project(text):
-            raise HTTPException(status_code=406, detail="El documento fue rechazado porque no parece ser un proyecto académico válido (Ej. Currículums, Manuales).")
-            
-        # Limpiar estructura ANTES de anonimizar para que los regex funcionen
-        # sobre texto original (bibliografía, sección info equipo, etc.)
-        clean_text = nlp_service.strip_structure(text)
-        safe_text = nlp_service.anonymize_pii(clean_text)
-
-        # 2. Partir el texto con Spacy
-        chunks = nlp_service.chunk_text(safe_text)
-        
-        # 3. Vectorizar con Sentence-Transformers
-        embeddings = nlp_service.vectorize(chunks)
-
-        # 4. Guardar en Base de Datos Vectorial
-        chroma_service.add_vectors(
-            project_id=request.project_id,
-            texts=chunks,
-            embeddings=embeddings,
-            url_drive=request.url_drive
-        )
-
-        # 5. Ejecutar análisis automático de Océano Azul
-        analysis = await check_blue_ocean(request.project_id)
-
-        return {
-            "message": "Proyecto procesado e indexado con éxito",
-            "project_id": request.project_id,
-            "chunks_processed": len(chunks),
-            "analysis": analysis
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-async def process_folder_background(folder_id: str, access_token: str):
+def process_folder_background(folder_id: str, access_token: str, user_id: str):
+    print(f"================ INICIANDO TAREA DE BACKGROUND PARA FOLDER {folder_id} ================", flush=True)
+    progress_store[folder_id] = {"progress": 0, "total": 100, "message": "Iniciando..."}
     try:
         files = drive_service.get_files_in_folder(folder_id, access_token)
-        total = len(files)
-        if total == 0:
+        total_files = len(files)
+        # Escala de 100 puntos por archivo para máxima fluidez
+        total_progress = total_files * 100 if total_files > 0 else 100
+        
+        progress_store[folder_id] = {"progress": 0, "total": total_progress, "message": f"Se encontraron {total_files} archivos"}
+        print(f"BACKGROUND TASK: Total de archivos detectados = {total_files}", flush=True)
+        if total_files == 0:
+            print("BACKGROUND TASK: Abortando porque no hay archivos", flush=True)
             rabbitmq_service.publish_progress(
-                user_id="admin",
-                type_event="sync_error",
-                progress=0,
-                total=0,
-                message="No se encontraron PDFs en la carpeta."
+                user_id=user_id,
+                type_event="sync_complete",
+                progress=100,
+                total=100,
+                message="Carpeta vinculada (0 PDFs encontrados)."
             )
             return
 
         for i, file_info in enumerate(files):
             file_id = file_info.get("id")
             file_name = file_info.get("name")
+            base_progress = i * 100
             
-            rabbitmq_service.publish_progress(
-                user_id="admin",
-                type_event="sync_progress",
-                progress=i,
-                total=total,
-                message=f"Vectorizando {file_name}..."
-            )
+            progress_store[folder_id] = {
+                "progress": base_progress + 5,
+                "total": total_progress,
+                "message": f"[{i+1}/{total_files}] Descargando {file_name}..."
+            }
             
             try:
-                text = drive_service.process_drive_file(file_id, access_token)
+                text = drive_service.process_drive_file(file_id, file_name, access_token)
                 if not text or not nlp_service.is_valid_project(text):
                     continue
                 
                 clean_text = nlp_service.strip_structure(text)
                 safe_text = nlp_service.anonymize_pii(clean_text)
-                
                 chunks = nlp_service.chunk_text(safe_text)
-                embeddings = nlp_service.vectorize(chunks)
+                total_chunks = len(chunks)
+                
+                # VECTORIZACIÓN POR LOTES (No altera el resultado de la IA)
+                # El modelo procesa 3 fragmentos, los guarda, luego otros 3, etc.
+                # Al final, se unen en la misma lista exacta como si fuera de un jalón.
+                embeddings = []
+                batch_size = 3
+                for j in range(0, total_chunks, batch_size):
+                    batch = chunks[j:j+batch_size]
+                    
+                    fraction = (j / total_chunks) if total_chunks > 0 else 1
+                    sub_progress = int(10 + (fraction * 80))
+                    
+                    progress_store[folder_id] = {
+                        "progress": base_progress + sub_progress,
+                        "total": total_progress,
+                        "message": f"[{i+1}/{total_files}] Vectorizando: {j}/{total_chunks} fragmentos"
+                    }
+                    
+                    # Llamamos a tu misma función de IA, solo que con pedazos más chicos
+                    batch_embeddings = nlp_service.vectorize(batch)
+                    embeddings.extend(batch_embeddings)
+                
+                # Al salir del bucle, la variable 'embeddings' tiene exactamente los mismos 
+                # datos matemáticos que si lo hubieras corrido todo junto. ¡100% seguro!
+                
+                progress_store[folder_id] = {
+                    "progress": base_progress + 95,
+                    "total": total_progress,
+                    "message": f"[{i+1}/{total_files}] Guardando proyecto en BD..."
+                }
                 
                 project_id = file_name.replace(".pdf", "").replace(".PDF", "").strip().lower()
                 url_drive = f"https://drive.google.com/file/d/{file_id}/view"
@@ -123,134 +112,79 @@ async def process_folder_background(folder_id: str, access_token: str):
                     embeddings=embeddings,
                     url_drive=url_drive
                 )
+                print(f"✅ Vectorizado y guardado: {project_id} ({len(chunks)} chunks)", flush=True)
             except Exception as e:
-                print(f"Error procesando {file_name}: {e}")
+                print(f"❌ Error procesando {file_name}: {e}", flush=True)
                 continue
                 
+        progress_store[folder_id] = {
+            "progress": total_progress,
+            "total": total_progress,
+            "message": "¡Sincronización completada!"
+        }
+        
+        # Enviar notificación Push de éxito a Firebase!
         rabbitmq_service.publish_progress(
-            user_id="admin",
+            user_id=user_id,
             type_event="sync_complete",
-            progress=total,
-            total=total,
-            message="Sincronización de Océanos Azules completada."
+            progress=total_progress,
+            total=total_progress,
+            message="¡Archivos sincronizados y vectorizados en Corvus!"
         )
         
+        
     except Exception as e:
+        print(f"ERROR FATAL DE SINCRONIZACIÓN: {str(e)}")
+        import traceback
+        traceback.print_exc()
         rabbitmq_service.publish_progress(
-            user_id="admin",
+            user_id=user_id,
             type_event="sync_error",
             progress=0,
             total=0,
             message=f"Error fatal: {str(e)}"
         )
+        progress_store[folder_id] = {
+            "progress": -1,
+            "total": 100,
+            "message": f"Error fatal: {str(e)}"
+        }
 
 @router.post("/process-folder", status_code=202)
 async def process_folder(request: ProcessFolderRequest, background_tasks: BackgroundTasks):
     """
     Inicia la sincronización asíncrona de una carpeta entera de Google Drive.
     """
-    background_tasks.add_task(process_folder_background, request.folder_id, request.access_token)
-    return {"message": "Sincronización iniciada en segundo plano."}
-
-@router.post("/process-local-project")
-async def process_local_project_document(project_id: str, file: UploadFile = File(...)):
-    """
-    Ruta para hacer PRUEBAS LOCALES.
-    Sube un PDF desde tu computadora, lo vectoriza y lo guarda en ChromaDB.
-    """
     try:
-        filename_lower = file.filename.lower()
-        valid_extensions = ('.pdf', '.md', '.txt')
-        if not filename_lower.endswith(valid_extensions):
-            raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
-            
-        project_id = project_id.lower().strip()
+        import requests
+        from app.core.config import settings
         
-        # 1. Extraer texto del archivo subido
-        file_bytes = await file.read()
+        # Validar si ya está sincronizada internamente llamando al Auth Service
+        auth_url = f"{settings.AUTH_SERVICE_URL}/folders/check/{request.folder_id}"
+        response = requests.get(auth_url, timeout=5)
         
-        full_text = ""
-        if filename_lower.endswith('.pdf'):
-            file_stream = io.BytesIO(file_bytes)
-            with pdfplumber.open(file_stream) as pdf:
-                for page in pdf.pages:
-                    text = page.extract_text()
-                    if text:
-                        full_text += text + "\n"
-        else:
-            # Es un archivo MD o TXT
-            full_text = file_bytes.decode('utf-8')
-                    
-        if not full_text:
-            raise HTTPException(status_code=400, detail="No se pudo extraer texto del PDF")
-
-        # 1.5 Filtro de Seguridad y Privacidad
-        if not nlp_service.is_valid_project(full_text):
-            raise HTTPException(status_code=406, detail="El documento fue rechazado porque no parece ser un proyecto académico válido (Ej. Currículums, Manuales).")
-            
-        # Limpiar estructura ANTES de anonimizar para que los regex funcionen
-        # sobre texto original (bibliografía, sección info equipo, etc.)
-        clean_text = nlp_service.strip_structure(full_text)
-        safe_text = nlp_service.anonymize_pii(clean_text)
-
-        # 2. Partir el texto con Spacy
-        chunks = nlp_service.chunk_text(safe_text)
-        
-        # 3. Vectorizar con Sentence-Transformers
-        embeddings = nlp_service.vectorize(chunks)
-
-        # 4. Obtener el historial existente (para comparar SIN guardar la prueba)
-        all_data = chroma_service.get_all_embeddings()
-        db_embeddings = all_data.get("embeddings")
-        db_metadatas = all_data.get("metadatas")
-        db_documents = all_data.get("documents")
-
-        if db_embeddings is None or len(db_embeddings) == 0:
-            raise HTTPException(status_code=404, detail="No hay historial en la base de datos para comparar.")
-
-        # Reconstruir el historial agrupando por proyecto
-        projects_texts = {}
-        projects_embeddings = {}
-        for i, meta in enumerate(db_metadatas):
-            p_id = meta["project_id"]
-            if p_id not in projects_texts:
-                projects_texts[p_id] = ""
-                projects_embeddings[p_id] = []
-            projects_texts[p_id] += db_documents[i] + " "
-            projects_embeddings[p_id].append(db_embeddings[i])
-
-        history_names = []
-        history_texts = []
-        history_embeddings = []
-        for p_id, text in projects_texts.items():
-            history_names.append(p_id)
-            history_texts.append(text)
-            history_embeddings.append(np.mean(projects_embeddings[p_id], axis=0).tolist())
-
-        # 5. Ejecutar análisis automático de Océano Azul SIN GUARDAR EN BD
-        new_project_text = " ".join(chunks)
-        new_project_embedding = np.mean(embeddings, axis=0).tolist()
-        
-        analysis = cluster_logic.find_blue_oceans_hybrid(
-            new_project_text=new_project_text,
-            existing_texts=history_texts,
-            new_project_embedding=new_project_embedding,
-            existing_embeddings=history_embeddings,
-            existing_names=history_names
-        )
-        
-        analysis["project_id"] = project_id
-
-        return {
-            "message": "PDF de prueba analizado con éxito (No se guardó en la base de datos)",
-            "project_id": project_id,
-            "chunks_processed": len(chunks),
-            "analysis": analysis
-        }
-    except HTTPException:
-        raise
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("exists") is True:
+                # Si ya existe, retornamos inmediatamente y NO iniciamos la tarea asíncrona
+                return {"message": "La carpeta ya se encuentra sincronizada.", "sync_skipped": True}
+                
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error verificando carpeta con Auth Service: {e}")
+        # Si falla el servicio, continuamos con el flujo normal para no bloquear
+
+    background_tasks.add_task(process_folder_background, request.folder_id, request.access_token, request.user_id)
+    return {"message": "Sincronización iniciada en segundo plano.", "sync_skipped": False}
+
+@router.get("/sync-status/{folder_id}")
+async def get_sync_status(folder_id: str):
+    """
+    Devuelve el estado de la sincronización en progreso para el polling del móvil.
+    """
+    if folder_id in progress_store:
+        return progress_store[folder_id]
+    return {"progress": 0, "total": 100, "message": "Esperando inicialización..."}
+
 
 @router.get("/blue-ocean/{project_id}")
 async def check_blue_ocean(project_id: str):
@@ -383,3 +317,186 @@ async def get_blue_ocean_niches():
         "description": "Descubre océanos azules en la intersección de la tecnología y la sociedad. Selecciona un área de innovación para comenzar tu investigación.",
         "niches": niches
     }
+
+from fastapi import Header
+
+@router.post("/populate-from-local-folder")
+async def populate_from_local_folder(x_api_key: str = Header(default=None)):
+    """
+    Ruta para procesar todos los archivos locales en la carpeta projectsTests.
+    Fase 1: Extracción
+    Fase 2: NLP y SpaCy (Anonimización)
+    Fase 3: Vectorización
+    Y finalmente guardar en ChromaDB de forma persistente.
+    """
+    import os
+    from pathlib import Path
+    
+    projects_dir = Path(__file__).resolve().parent.parent.parent / "projectsTests"
+    
+    if x_api_key != "admin-corvus-123":
+        raise HTTPException(status_code=403, detail="Acceso denegado. Se requiere clave de administrador para evitar el envenenamiento de datos.")
+    
+    if not projects_dir.exists() or not projects_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"No se encontró la carpeta: {projects_dir}")
+        
+    results = []
+    
+    for filename in os.listdir(projects_dir):
+        if not filename.lower().endswith(('.pdf', '.md', '.txt')):
+            continue
+            
+        file_path = projects_dir / filename
+        project_id = filename.lower().replace('.pdf', '').replace('.txt', '').replace('.md', '')
+        
+        try:
+            # Fase 1: Extracción
+            full_text = ""
+            if filename.lower().endswith('.pdf'):
+                doc = fitz.open(file_path)
+                full_text = pymupdf4llm.to_markdown(doc)
+            else:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    full_text = f.read()
+                    
+            if not full_text:
+                results.append({"file": filename, "status": "error", "message": "Texto vacío"})
+                continue
+                
+            # Fase 2: Filtrado y Anonimización
+            clean_text = nlp_service.strip_structure(full_text)
+            safe_text = nlp_service.anonymize_pii(clean_text)
+            
+            # Fase 3: Vectorización
+            chunks = nlp_service.chunk_text(safe_text)
+            embeddings = nlp_service.vectorize(chunks)
+            
+            if not embeddings:
+                results.append({"file": filename, "status": "error", "message": "Fallo vectorización"})
+                continue
+                
+            # Almacenar en ChromaDB
+            chroma_service.add_vectors(
+                project_id=project_id,
+                texts=chunks,
+                embeddings=embeddings,
+                url_drive=f"local://projectsTests/{filename}"
+            )
+            
+            results.append({"file": filename, "status": "success", "chunks": len(chunks)})
+        except Exception as e:
+            results.append({"file": filename, "status": "error", "message": str(e)})
+            
+    return {
+        "message": "Procesamiento de carpeta finalizado",
+        "total_archivos_intentados": len(results),
+        "resultados": results
+    }
+
+@router.post("/analyze-proposal-phi3")
+async def analyze_proposal_phi3(file: UploadFile = File(...)):
+    """
+    Ejecuta el Pipeline de 5 Fases para Análisis de Originalidad con Ollama (Phi-3 Mini).
+    """
+    try:
+        filename_lower = file.filename.lower()
+        if not filename_lower.endswith(('.pdf', '.md', '.txt')):
+            raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
+            
+        # Fase 1: Ingesta y Extracción Ligera
+        file_bytes = await file.read()
+        full_text = ""
+        if filename_lower.endswith('.pdf'):
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            full_text = pymupdf4llm.to_markdown(doc)
+        else:
+            full_text = file_bytes.decode('utf-8')
+                    
+        if not full_text:
+            raise HTTPException(status_code=400, detail="No se pudo extraer texto del documento.")
+
+        # SEGURIDAD RASP: Detectar Inyección de Prompt
+        if nlp_service.detect_prompt_injection(full_text):
+            raise HTTPException(status_code=403, detail="ALERTA: Se detectó un intento de inyección de prompt (Prompt Injection). El documento ha sido rechazado.")
+
+        # Fase 2: Filtrado Estructural y Anonimización (SpaCy)
+        clean_text = nlp_service.strip_structure(full_text)
+        
+        # SEGURIDAD RASP: Normalizar Homoglifos (evitar evasión vectorial con cirílico)
+        clean_text = nlp_service.normalize_homoglyphs(clean_text)
+        
+        safe_text = nlp_service.anonymize_pii(clean_text)
+
+        # Fase 3: Vectorización y Persistencia (Embeddings)
+        chunks = nlp_service.chunk_text(safe_text)
+        embeddings = nlp_service.vectorize(chunks)
+        
+        if not embeddings:
+            raise HTTPException(status_code=400, detail="El documento no tiene contenido suficiente para vectorizar.")
+        
+        # Fase 4: Búsqueda de Coincidencias Rápidas (Multi-Query K-NN en ChromaDB)
+        # Seleccionamos un máximo de 5 chunks (los más representativos) para no saturar la búsqueda
+        query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
+        
+        search_results = chroma_service.search_similar_multi(query_embeddings=query_subset, n_results=3)
+        
+        similar_projects = []
+        if search_results and "documents" in search_results and search_results["documents"]:
+            grouped_projects = {}
+            # Como es multi-query, search_results["documents"] es una lista de listas
+            for q_idx in range(len(search_results["documents"])):
+                docs = search_results["documents"][q_idx]
+                metas = search_results["metadatas"][q_idx]
+                distances = search_results["distances"][q_idx] if "distances" in search_results else [0]*len(docs)
+                
+                for doc, meta, dist in zip(docs, metas, distances):
+                    p_id = meta.get("project_id", "Desconocido")
+                    if p_id not in grouped_projects:
+                        grouped_projects[p_id] = {"chunks": [], "min_distance": float('inf')}
+                    if doc not in grouped_projects[p_id]["chunks"]:
+                        grouped_projects[p_id]["chunks"].append(doc)
+                    if dist < grouped_projects[p_id]["min_distance"]:
+                        grouped_projects[p_id]["min_distance"] = dist
+                
+            # Seleccionar los 3 mejores proyectos en base a la distancia mínima agregada
+            sorted_projects = sorted(grouped_projects.items(), key=lambda x: x[1]["min_distance"])[:3]
+            
+            for p_id, p_data in sorted_projects:
+                dist = p_data["min_distance"]
+                similitud_pct = max(0, min(100, (1.0 - dist) * 100))
+                
+                similar_projects.append({
+                    "title": p_id.upper(),
+                    "content": " ".join(p_data["chunks"][:3]), # Solo pasamos los 3 mejores chunks al LLM
+                    "similarity_pct": similitud_pct
+                })
+
+        # Fase 5: Análisis de Originalidad con Phi-3 Mini (Ollama)
+        proposal_text = " ".join(chunks)
+        
+        if not ollama_service.check_health():
+             return {
+                 "status": "warning",
+                 "message": "Pipeline completado hasta Fase 4. Ollama no está respondiendo en localhost:11434.",
+                 "similar_projects": [p["title"] for p in similar_projects]
+             }
+
+        llm_verdict = ollama_service.analyze_originality(
+            proposal_text=proposal_text,
+            similar_projects=similar_projects
+        )
+
+        return {
+            "status": "success",
+            "message": "Análisis completado con Phi-3 Mini",
+            "similar_projects_found": len(similar_projects),
+            "ollama_analysis": llm_verdict
+        }
+
+    except HTTPException:
+        # Re-lanzar excepciones HTTP explícitas (como el 403 de Prompt Injection)
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
