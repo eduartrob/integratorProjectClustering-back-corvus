@@ -13,7 +13,7 @@ from app.services.nlp_service import nlp_service
 from app.services.chroma_service import chroma_service
 from app.services.cluster_logic import cluster_logic
 from app.services.rabbitmq_service import rabbitmq_service
-from app.services.ollama_service import ollama_service
+from app.services.llm_client import llm_client as ollama_service
 
 router = APIRouter()
 
@@ -272,7 +272,7 @@ async def get_blue_ocean_niches():
         unique_projects = {}
         if results and results.get('metadatas'):
             for meta in results['metadatas']:
-                if meta.get('is_blue_ocean'):
+                if meta and meta.get('is_blue_ocean'):
                     p_id = meta.get('project_id')
                     if p_id and p_id not in unique_projects:
                         unique_projects[p_id] = meta
