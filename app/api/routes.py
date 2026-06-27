@@ -260,63 +260,50 @@ async def check_blue_ocean(project_id: str):
 @router.get("/blue-ocean-niches")
 async def get_blue_ocean_niches():
     """
-    Retorna una lista de nichos de mercado u 'Océanos Azules' inexplorados 
-    basado en el análisis global de los proyectos (leído desde unexplored_topics.json).
+    Retorna una lista de proyectos detectados como 'Océanos Azules' inexplorados 
+    directamente desde la base de datos vectorial ChromaDB.
     """
-    import json
-    from pathlib import Path
+    from app.services.chroma_service import chroma_service
     
     niches = []
     try:
-        model_dir = Path(__file__).resolve().parent.parent / "models"
-        topics_path = model_dir / "unexplored_topics.json"
+        results = chroma_service.collection.get(include=["metadatas"])
         
-        if topics_path.exists():
-            with open(topics_path, "r", encoding="utf-8") as f:
-                topics = json.load(f)
-                
-            for t in topics:
-                niches.append({
-                    "category": "INNOVACIÓN DETECTADA",
-                    "tag": "Área Inexplorada",
-                    "title": t,
-                    "description": "Área de oportunidad identificada matemáticamente a través de los vacíos en el grafo topológico HDBSCAN."
-                })
+        unique_projects = {}
+        if results and results.get('metadatas'):
+            for meta in results['metadatas']:
+                if meta.get('is_blue_ocean'):
+                    p_id = meta.get('project_id')
+                    if p_id and p_id not in unique_projects:
+                        unique_projects[p_id] = meta
+        
+        for p_id, meta in unique_projects.items():
+            name = p_id.replace('proyecto_', '').replace('.md', '').replace('.pdf', '').replace('_', ' ').title()
+            
+            niches.append({
+                "category": "INNOVACIÓN ACADÉMICA",
+                "tag": "Océano Azul Real",
+                "title": name,
+                "description": "Este proyecto ha sido clasificado por la IA como una anomalía semántica de alta varianza, indicando un enfoque único e inexplorado respecto a todos los demás trabajos en la base de datos."
+            })
+            
     except Exception as e:
-        print(f"Error cargando unexplored_topics.json en routes: {e}")
+        print(f"Error extrayendo los océanos azules desde ChromaDB: {e}")
         
     # Fallback si falla o está vacío
     if not niches:
         niches = [
             {
-                "category": "IA & Sostenibilidad",
-                "tag": "Alto Potencial",
-                "title": "IA en Agricultura de Precisión",
-                "description": "Optimización de recursos hídricos y predicción de cosechas mediante modelos de RAG alimentados por datos climáticos en tiempo real y sensores IoT."
-            },
-            {
-                "category": "Logística & Supply Chain",
-                "tag": "Innovación",
-                "title": "Logística Circular",
-                "description": "Rediseño de cadenas de suministro para eliminar residuos, utilizando blockchain para trazabilidad de materiales reciclados."
-            },
-            {
-                "category": "BIOTECH",
-                "tag": "Futurista",
-                "title": "Biomateriales de Construcción",
-                "description": "Desarrollo de estructuras vivas y auto-reparables utilizando micelio fúngico integrado en arquitecturas modulares."
-            },
-            {
-                "category": "FINTECH & QUANTUM",
-                "tag": "Novedad Alta",
-                "title": "Computación Cuántica en Finanzas",
-                "description": "Modelado de riesgos hiper-complejos y optimización de carteras utilizando algoritmos cuánticos híbridos."
+                "category": "MÉTRICA VACÍA",
+                "tag": "Requiere Ejecución",
+                "title": "Aún no hay Océanos Azules",
+                "description": "El algoritmo de clustering global aún no ha detectado proyectos con suficiente originalidad semántica o se requiere ejecutar un análisis con un mayor volumen de documentos."
             }
         ]
 
     return {
-        "title": "Temas Inexplorados",
-        "description": "Descubre océanos azules en la intersección de la tecnología y la sociedad. Selecciona un área de innovación para comenzar tu investigación.",
+        "title": "Océanos Azules (Proyectos Reales)",
+        "description": "Descubre los verdaderos océanos azules en la intersección de la tecnología y la academia, calculados en tiempo real por Corvus HDBSCAN.",
         "niches": niches
     }
 
