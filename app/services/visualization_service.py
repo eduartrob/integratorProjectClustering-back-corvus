@@ -24,7 +24,9 @@ class VisualizationService:
 
         projects_data = {}
         for i, meta in enumerate(results['metadatas']):
-            p_id = meta['project_id']
+            p_id = meta.get('project_id')
+            if not p_id:
+                continue
             if p_id not in projects_data:
                 projects_data[p_id] = {
                     'embeddings': [],
