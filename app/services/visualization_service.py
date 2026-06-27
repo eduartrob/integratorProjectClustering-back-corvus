@@ -41,6 +41,35 @@ class VisualizationService:
         
         return unique_ids, np.array(aggregated_embeddings), labels, projects_data
 
+    def get_cluster_names(self):
+        """Genera nombres para los clusters basados en palabras clave comunes de los IDs."""
+        unique_ids, _, labels, _ = self._get_data_from_db()
+        if not unique_ids:
+            return {}
+
+        cluster_counts = Counter(labels)
+        stopwords = {'de', 'la', 'el', 'en', 'y', 'para', 'con', 'los', 'las', 'un', 'una', 'del', 'al', 'proyecto', 'md', 'pdf'}
+        
+        cluster_names = {}
+        for cid in cluster_counts.keys():
+            if cid == -1:
+                cluster_names[cid] = "Océano Azul"
+                continue
+            
+            p_ids = [unique_ids[i] for i in range(len(unique_ids)) if labels[i] == cid]
+            words = []
+            for pid in p_ids:
+                clean_pid = pid.lower().replace('.md', '').replace('.pdf', '').replace('_', ' ').replace('-', ' ')
+                words.extend([w for w in clean_pid.split() if w not in stopwords and len(w) > 2])
+            
+            if words:
+                common_words = [w[0].title() for w in Counter(words).most_common(2)]
+                cluster_names[cid] = " / ".join(common_words)
+            else:
+                cluster_names[cid] = f"Clúster {cid}"
+                
+        return cluster_names
+
     def get_cluster_stats(self):
         """Genera estadisticas basicas de los clusters para el panel de admin."""
         unique_ids, _, labels, projects_data = self._get_data_from_db()
@@ -51,17 +80,54 @@ class VisualizationService:
         total_projects = len(unique_ids)
         blue_oceans = cluster_counts.get(-1, 0)
         
+        cluster_names = self.get_cluster_names()
+        
         clusters_info = []
         for cid, count in cluster_counts.items():
             if cid != -1:
-                clusters_info.append({"cluster_id": cid, "project_count": count})
+                clusters_info.append({
+                    "cluster_id": cid, 
+                    "project_count": count,
+                    "cluster_name": cluster_names.get(cid, f"Clúster {cid}")
+                })
 
         return {
             "total_projects": total_projects,
             "total_clusters": len(clusters_info),
             "blue_oceans": blue_oceans,
-            "clusters_detail": sorted(clusters_info, key=lambda x: x['cluster_id'])
+            "clusters_detail": sorted(clusters_info, key=lambda x: x['cluster_id']),
+            "cluster_names": cluster_names
         }
+
+    def get_2d_scatter_data(self):
+        """Genera y devuelve las coordenadas UMAP 2D para la gráfica ScatterChart del frontend."""
+        if not os.path.exists(self.umap_model_path):
+            return []
+
+        unique_ids, embeddings_384d, labels, _ = self._get_data_from_db()
+        if not unique_ids:
+            return []
+
+        try:
+            reducer_clustering = joblib.load(self.umap_model_path)
+            embeddings_20d = reducer_clustering.transform(embeddings_384d)
+            
+            # Proyectar a 2D para ScatterChart Recharts
+            reducer_2d = umap.UMAP(n_components=2, n_neighbors=12, min_dist=0.05, metric='euclidean', random_state=42)
+            embeddings_2d = reducer_2d.fit_transform(embeddings_20d)
+        except Exception:
+            return []
+
+        scatter_data = []
+        for i in range(len(unique_ids)):
+            scatter_data.append({
+                "x": float(embeddings_2d[i, 0]),
+                "y": float(embeddings_2d[i, 1]),
+                "label": int(labels[i]),
+                "name": unique_ids[i].replace('_', ' ').title()
+            })
+            
+        return scatter_data
 
     def generate_3d_html(self):
         """Genera el HTML de la grafica 3D interactiva."""

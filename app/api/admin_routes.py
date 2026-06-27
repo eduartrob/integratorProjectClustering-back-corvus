@@ -18,6 +18,17 @@ async def get_clusters_3d_html():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/clusters-2d", tags=["Admin Panel"])
+async def get_clusters_2d():
+    """
+    Devuelve las coordenadas UMAP 2D para renderizar la gráfica scatter (Recharts).
+    """
+    try:
+        data = visualization_service.get_2d_scatter_data()
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/clusters-stats", tags=["Admin Panel"])
 async def get_clusters_stats():
     """
@@ -132,9 +143,11 @@ async def get_recent_projects(limit: int = 50):
     Devuelve la lista del historial de proyectos extraída desde ChromaDB.
     Se utiliza para la tabla del panel de administración.
     """
+    from app.services.visualization_service import visualization_service
     from app.services.chroma_service import chroma_service
     try:
         results = chroma_service.collection.get(include=["metadatas"])
+        cluster_names = visualization_service.get_cluster_names()
         
         unique_projects = {}
         if results and results['metadatas']:
@@ -152,7 +165,9 @@ async def get_recent_projects(limit: int = 50):
                         status = "Océano Azul"
                         status_class = "bg-error-container/20 text-error"
                     elif 'cluster_id' in meta:
-                        status = f"En Cluster {meta['cluster_id']}"
+                        cid = meta['cluster_id']
+                        c_name = cluster_names.get(cid, f"Clúster {cid}")
+                        status = f"Tema: {c_name}"
                         status_class = "bg-primary-container/20 text-primary"
                     else:
                         status = "Pendiente"
