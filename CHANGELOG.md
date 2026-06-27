@@ -2,6 +2,10 @@
 
 ## [0.4.0] - 2026-06-26
 
+### Arquitectura y Refactorización
+- **Clustering Service Nativo**: Se refactorizó toda la lógica de machine learning (UMAP, HDBSCAN, Plotly, ChromaDB) desde el antiguo script CLI aislado (`visualize_clusters.py`) hacia un servicio interno nativo de FastAPI (`app/services/clustering_service.py`).
+- **Eliminación de Subprocess**: Se eliminó el anti-patrón de invocar el algoritmo de clustering mediante `subprocess.run()`. El endpoint `/admin/execute` ahora invoca la clase `ClusteringEngineService` directamente en memoria mediante `BackgroundTasks`, reduciendo el consumo de RAM, eliminando dependencias CLI innecesarias, e incrementando la estabilidad general del backend.
+
 ### Precisión Matemática y Vectorial (Core Engine)
 - **Cerebro Multilingüe**: Se reemplazó el modelo base de embeddings por `paraphrase-multilingual-MiniLM-L12-v2`. Esto otorga una comprensión semántica profunda de textos técnicos en español nativo, superando las limitaciones del modelo anterior enfocado en inglés.
 - **Búsqueda Multi-Query K-NN**: Se erradicó la técnica de promediar vectores por proyecto (`np.mean`), la cual diluía la especificidad semántica. Ahora el sistema compara los fragmentos más representativos (Top 5) de manera independiente contra el historial, incrementando drásticamente la detección de colisiones de plagio o similitudes de nicho.

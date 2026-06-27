@@ -88,20 +88,21 @@ async def execute_clustering(background_tasks: BackgroundTasks):
     """
     Ejecuta manualmente el algoritmo de clustering global.
     """
-    import subprocess
-    import os
-    from app.core.config import settings
-
-    def run_script():
-        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "visualize_clusters.py")
+    from app.services.clustering_service import clustering_engine
+    
+    def run_clustering():
         try:
-            # Ejecutar el script original que hace el trabajo pesado
-            subprocess.run(["python3", script_path], check=True)
-            print("Clustering global ejecutado exitosamente.")
+            success = clustering_engine.execute_global_clustering()
+            if success:
+                print("Clustering global ejecutado exitosamente.")
+            else:
+                print("Clustering cancelado: no hay suficientes datos.")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"Error ejecutando clustering: {e}")
 
-    background_tasks.add_task(run_script)
+    background_tasks.add_task(run_clustering)
     return {"message": "Clustering global iniciado en segundo plano. Esto puede tomar unos minutos."}
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks

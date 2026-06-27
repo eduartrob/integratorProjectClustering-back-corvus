@@ -153,7 +153,7 @@ def process_folder_background(folder_id: str, access_token: str, user_id: str):
         }
 
 @router.post("/process-folder", status_code=202)
-async def process_folder(request: ProcessFolderRequest, background_tasks: BackgroundTasks, Form):
+async def process_folder(request: ProcessFolderRequest, background_tasks: BackgroundTasks):
     """
     Inicia la sincronización asíncrona de una carpeta entera de Google Drive.
     """
