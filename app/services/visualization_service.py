@@ -19,7 +19,7 @@ class VisualizationService:
     def _get_data_from_db(self):
         """Extrae los proyectos y sus embeddings de ChromaDB."""
         results = chroma_service.collection.get(include=["embeddings", "metadatas"])
-        if not results or not results['embeddings']:
+        if not results or results.get('embeddings') is None or len(results['embeddings']) == 0:
             return None, None, None, None
 
         projects_data = {}
