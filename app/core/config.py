@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     
     # Microservicios
     AUTH_SERVICE_URL: str = "http://localhost:3001"
+    LLM_SERVICE_URL: str = "http://localhost:3003"
     
     # Modelos IA
     MODELS_DIR: str = "./app/models"

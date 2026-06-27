@@ -27,7 +27,9 @@ async def get_clusters_2d():
         data = visualization_service.get_2d_scatter_data()
         return data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"{str(e)}\n{tb}")
 
 @router.get("/clusters-stats", tags=["Admin Panel"])
 async def get_clusters_stats():
@@ -40,7 +42,9 @@ async def get_clusters_stats():
             raise HTTPException(status_code=500, detail=stats["error"])
         return stats
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"{str(e)}\n{tb}")
 
 @router.get("/projects-count", tags=["Admin Panel"])
 async def get_projects_count():

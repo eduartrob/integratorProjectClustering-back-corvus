@@ -360,7 +360,7 @@ async def populate_from_local_folder(x_api_key: str = Header(default=None)):
             chunks = nlp_service.chunk_text(safe_text)
             embeddings = nlp_service.vectorize(chunks)
             
-            if not embeddings:
+            if embeddings is None or len(embeddings) == 0:
                 results.append({"file": filename, "status": "error", "message": "Fallo vectorización"})
                 continue
                 
@@ -417,7 +417,7 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         chunks = nlp_service.chunk_text(safe_text)
         embeddings = nlp_service.vectorize(chunks)
         
-        if not embeddings:
+        if embeddings is None or len(embeddings) == 0:
             raise HTTPException(status_code=400, detail="El documento no tiene contenido suficiente.")
         
         query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
@@ -636,7 +636,7 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
         chunks = nlp_service.chunk_text(safe_text)
         embeddings = nlp_service.vectorize(chunks)
         
-        if not embeddings:
+        if embeddings is None or len(embeddings) == 0:
             raise HTTPException(status_code=400, detail="El documento no tiene contenido suficiente para vectorizar.")
         
         # Fase 4: Búsqueda de Coincidencias Rápidas (Multi-Query K-NN en ChromaDB)
