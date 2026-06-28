@@ -3,11 +3,12 @@ import aiohttp
 import json
 import logging
 from app.services.blue_ocean_db import blue_ocean_db
+from app.api.routes import analysis_lock
 
 logger = logging.getLogger(__name__)
 
-# URL del LLM Service (interno en la red de Docker / Local)
-LLM_SERVICE_URL = "http://localhost:8002/api/v1/analyze-blue-ocean" # Ajustar según el puerto real del llm-back-corvus
+# URL del LLM Service (interno en la red de Docker)
+LLM_SERVICE_URL = "http://llm-service:3003/api/v1/llm/analyze-blue-ocean"
 
 class BlueOceanWorker:
     def __init__(self):
@@ -27,29 +28,43 @@ class BlueOceanWorker:
             logger.info("Blue Ocean Worker stopped.")
 
     async def _worker_loop(self):
+        from app.services.chroma_service import chroma_service
+        
         while self._is_running:
             try:
                 # 1. Obtener nichos pendientes
                 pending = blue_ocean_db.get_pending_niches()
+                
+                # 1.5 Auto-descubrimiento proactivo: Si no hay pendientes, escanear ChromaDB
+                if not pending:
+                    try:
+                        results = chroma_service.collection.get(include=["metadatas"])
+                        if results and results.get('metadatas'):
+                            for meta in results['metadatas']:
+                                if meta and meta.get('is_blue_ocean'):
+                                    p_id = meta.get('project_id')
+                                    if p_id:
+                                        # Esto lo añade a la DB como "pending" si no existía antes
+                                        blue_ocean_db.register_niche_if_not_exists(p_id)
+                                        
+                        # Volver a checar la lista después del escaneo
+                        pending = blue_ocean_db.get_pending_niches()
+                    except Exception as e:
+                        logger.error(f"Worker: Error escaneando ChromaDB para auto-descubrimiento: {e}")
                 
                 if pending:
                     # Procesamos solo uno por ciclo para no saturar Ollama
                     niche_id = pending[0]
                     logger.info(f"Worker: Procesando análisis para el nicho {niche_id}")
                     
-                    # Extraer info base del nicho desde ChromaDB (Aquí simulamos la extracción)
-                    # Idealmente el Integrador ya tiene los metadatos.
-                    # Por simplicidad, el worker le pide al DB local que solo guarda el ID, 
-                    # así que necesitamos los metadatos reales. En producción se obtendrían de Chroma.
-                    # Asumimos que los metadatos se pueden reconstruir o ya están.
-                    
-                    # Para mantener el desacople, usaremos un nombre derivado del ID
+                    # Reconstruir metadatos
                     title = niche_id.replace('proyecto_', '').replace('.md', '').replace('.pdf', '').replace('_', ' ').title()
                     description = "Nicho inexplorado detectado por baja colisión semántica."
                     category = "INNOVACIÓN ACADÉMICA"
                     
-                    # 2. Llamar al LLM Service
-                    analysis_data = await self._call_llm_service(title, description, category)
+                    # 2. Llamar al LLM Service (protegido por el lock global para no interrumpir a los usuarios)
+                    async with analysis_lock:
+                        analysis_data = await self._call_llm_service(title, description, category)
                     
                     if analysis_data:
                         # 3. Guardar en BD

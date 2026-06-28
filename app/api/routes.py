@@ -321,7 +321,7 @@ async def get_blue_ocean_niches():
                 "category": "INNOVACIÓN ACADÉMICA",
                 "tag": "Océano Azul Real",
                 "title": name,
-                "description": "Este proyecto ha sido clasificado por la IA como una anomalía semántica de alta varianza, indicando un enfoque único e inexplorado respecto a todos los demás trabajos en la base de datos.",
+                "description": "Este proyecto ha sido clasificado como una anomalía semántica de alta varianza, indicando un enfoque único e inexplorado respecto a todos los demás trabajos en la base de datos.",
                 "view_count": views,
                 "recent_viewers": niche_state.get('recent_viewers', []),
                 "analysis_status": niche_state.get('analysis_status', 'pending'),
@@ -475,12 +475,16 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         else:
             full_text = file_bytes.decode('utf-8')
                     
-        if not full_text:
-            raise HTTPException(status_code=400, detail="No se pudo extraer texto del documento.")
+        if not full_text or len(full_text.strip()) < 50:
+            raise HTTPException(
+                status_code=400, 
+                detail="El documento no parece ser una propuesta de proyecto integrador. No se pudo extraer texto (podría ser un documento escaneado o contener muy poco texto)."
+            )
 
         # ── Validador de tipo de documento ─────────────────────────────────────
         doc_score = _score_document_relevance(full_text)
-        if doc_score < 25:
+        # Se requiere al menos un score de 50 para pasar la prueba (ej. mención de universidad + estructura de propuesta)
+        if doc_score < 50:
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -705,10 +709,10 @@ async def _run_analysis_background(user_id: str, draft_path: str):
 
             analysis_progress_store[user_id] = {"phase": 7, "message": "Generando recomendaciones técnicas..."}
 
-            try:
-                os.remove(draft_path)
-            except:
-                pass
+            analysis_progress_store[user_id] = {"phase": 7, "message": "Generando recomendaciones técnicas..."}
+
+            # El draft NO se borra aquí. Se borra cuando el usuario lo reclama exitosamente
+            # en el endpoint GET /analysis-result/{user_id}. Así evitamos pérdida de datos.
 
             analysis_progress_store[user_id] = {"phase": 8, "message": "Afinando veredicto final..."}
 
@@ -769,6 +773,15 @@ async def get_analysis_result(user_id: str):
     if user_id in analysis_result_store:
         result = analysis_result_store.pop(user_id)  # Consumir y limpiar
         analysis_progress_store.pop(user_id, None)
+        
+        # Limpiar el borrador ahora que el usuario tiene el resultado
+        draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+        try:
+            if os.path.exists(draft_path):
+                os.remove(draft_path)
+        except Exception:
+            pass
+            
         return result
 
     phase_info = analysis_progress_store.get(user_id, {})
