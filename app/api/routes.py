@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks, Form
 from pydantic import BaseModel
 from typing import List
@@ -19,6 +20,26 @@ router = APIRouter()
 
 # Global in-memory store for sync progress polling
 progress_store = {}
+analysis_progress_store = {}
+analysis_result_store = {}   # Almacena el resultado final del análisis exhaustivo
+active_analysis_tasks = {}   # Almacena las asyncio.Task activas para poder cancelarlas
+analysis_lock = asyncio.Lock()
+
+# ─── Palabras clave para validar tipo de documento ───────────────────────────
+_KW_PROPUESTA   = {"objetivo", "propuesta", "alcance", "justificación", "justificacion", "planteamiento", "antecedentes"}
+_KW_TECNICO     = {"sistema", "aplicación", "aplicacion", "app", "implementar", "desarrollar", "tecnología", "tecnologia", "software", "hardware", "algoritmo", "modelo", "api", "base de datos"}
+_KW_ACADEMICO   = {"metodología", "metodologia", "marco teórico", "marco teorico", "hipótesis", "hipotesis", "bibliografía", "bibliografia", "referencias", "resultados esperados", "conclusiones"}
+_KW_UNIVERSIDAD = {"proyecto integrador", "proyecto de residencia", "tesis", "ingeniería", "ingenieria", "universidad", "upchiapas", "titulación", "titulacion", "residencia profesional"}
+
+def _score_document_relevance(text: str) -> int:
+    """Devuelve un score 0-100 basado en presencia de palabras clave académicas."""
+    t = text.lower()
+    score = 0
+    if sum(1 for kw in _KW_PROPUESTA   if kw in t) >= 2: score += 25
+    if sum(1 for kw in _KW_TECNICO     if kw in t) >= 2: score += 25
+    if sum(1 for kw in _KW_ACADEMICO   if kw in t) >= 2: score += 25
+    if sum(1 for kw in _KW_UNIVERSIDAD if kw in t) >= 1: score += 25
+    return score
 
 
 
@@ -261,9 +282,14 @@ async def check_blue_ocean(project_id: str):
 async def get_blue_ocean_niches():
     """
     Retorna una lista de proyectos detectados como 'Océanos Azules' inexplorados 
-    directamente desde la base de datos vectorial ChromaDB.
+    directamente desde la base de datos vectorial ChromaDB, 
+    enriquecidos con métricas de interacción (vistas) y análisis IA.
+    Ordenados usando el algoritmo de Gravedad (novedad vs popularidad).
     """
     from app.services.chroma_service import chroma_service
+    from app.services.blue_ocean_db import blue_ocean_db
+    import time
+
     
     niches = []
     try:
@@ -280,12 +306,34 @@ async def get_blue_ocean_niches():
         for p_id, meta in unique_projects.items():
             name = p_id.replace('proyecto_', '').replace('.md', '').replace('.pdf', '').replace('_', ' ').title()
             
+            # Asegurar que existe en BD local
+            blue_ocean_db.register_niche_if_not_exists(p_id)
+            niche_state = blue_ocean_db.get_niche(p_id)
+            
+            # Calcular Algoritmo Gravity
+            # Score = (Vistas + 1) / (Horas_desde_creacion + 2)^1.5
+            hours_since_creation = (time.time() - niche_state.get('created_at', time.time())) / 3600.0
+            views = niche_state.get('view_count', 0)
+            gravity_score = (views + 1) / ((hours_since_creation + 2) ** 1.5)
+            
             niches.append({
+                "id": p_id,
                 "category": "INNOVACIÓN ACADÉMICA",
                 "tag": "Océano Azul Real",
                 "title": name,
-                "description": "Este proyecto ha sido clasificado por la IA como una anomalía semántica de alta varianza, indicando un enfoque único e inexplorado respecto a todos los demás trabajos en la base de datos."
+                "description": "Este proyecto ha sido clasificado por la IA como una anomalía semántica de alta varianza, indicando un enfoque único e inexplorado respecto a todos los demás trabajos en la base de datos.",
+                "view_count": views,
+                "recent_viewers": niche_state.get('recent_viewers', []),
+                "analysis_status": niche_state.get('analysis_status', 'pending'),
+                "_gravity_score": gravity_score # Campo temporal para ordenar
             })
+            
+        # Ordenar: Mayor gravedad primero (populares/nuevos arriba, viejos/ignorados abajo)
+        niches.sort(key=lambda x: x['_gravity_score'], reverse=True)
+        
+        # Eliminar el campo temporal antes de enviarlo
+        for niche in niches:
+            niche.pop('_gravity_score', None)
             
     except Exception as e:
         print(f"Error extrayendo los océanos azules desde ChromaDB: {e}")
@@ -305,6 +353,29 @@ async def get_blue_ocean_niches():
         "title": "Océanos Azules (Proyectos Reales)",
         "description": "Descubre los verdaderos océanos azules en la intersección de la tecnología y la academia, calculados en tiempo real por Corvus HDBSCAN.",
         "niches": niches
+    }
+
+from pydantic import BaseModel
+
+class NicheViewRequest(BaseModel):
+    user_avatar: str = None
+
+@router.post("/blue-ocean-niches/{niche_id}/view")
+async def track_niche_view(niche_id: str, payload: NicheViewRequest):
+    """
+    Registra que un usuario vio un nicho y devuelve los detalles completos del análisis.
+    """
+    from app.services.blue_ocean_db import blue_ocean_db
+    
+    # Registrar la vista
+    niche_state = blue_ocean_db.track_view(niche_id, payload.user_avatar)
+    
+    return {
+        "status": "success",
+        "niche_id": niche_id,
+        "view_count": niche_state.get("view_count", 0),
+        "analysis_status": niche_state.get("analysis_status"),
+        "analysis_data": niche_state.get("analysis_data")
     }
 
 from fastapi import Header
@@ -407,6 +478,18 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         if not full_text:
             raise HTTPException(status_code=400, detail="No se pudo extraer texto del documento.")
 
+        # ── Validador de tipo de documento ─────────────────────────────────────
+        doc_score = _score_document_relevance(full_text)
+        if doc_score < 25:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "El documento no parece ser una propuesta de proyecto integrador. "
+                    "Asegúrate de subir tu propuesta con secciones como Objetivo, Metodología y Tecnologías. "
+                    f"(Score de relevancia: {doc_score}/100)"
+                )
+            )
+
         if nlp_service.detect_prompt_injection(full_text):
             raise HTTPException(status_code=403, detail="ALERTA: Se detectó un intento de inyección de prompt.")
 
@@ -444,7 +527,10 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
             sorted_projects = sorted(grouped_projects.items(), key=lambda x: x[1]["min_distance"])[:3]
             for p_id, p_data in sorted_projects:
                 dist = p_data["min_distance"]
-                similitud_pct = max(0, min(100, (1.0 - dist) * 100))
+                # Ajuste heurístico: Los documentos del mismo dominio suelen tener distancia base ~0.4 a 0.5
+                # Solo distancias menores a 0.4 se consideran similitud real.
+                sim_factor = 1.0 - (dist / 0.4)
+                similitud_pct = max(0, min(100, sim_factor * 100))
                 if similitud_pct > max_similitud_pct:
                     max_similitud_pct = similitud_pct
                 similar_projects.append({
@@ -455,7 +541,7 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
 
         # Heurística de Alineación Académica y Mensajes Dinámicos
         words_count = len(full_text.split())
-        academic_alignment = 40 # Base
+        academic_alignment = 10 # Base muy baja para penalizar documentos sin estructura
         areas_of_improvement = []
         positive_feedback = []
         
@@ -463,7 +549,7 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         
         # 1. Análisis de Estructura (Longitud)
         if words_count >= 500:
-            academic_alignment += 10
+            academic_alignment += 20
             positive_feedback.append("Formato adecuado. La longitud del documento es óptima para una propuesta inicial.")
         else:
             areas_of_improvement.append("El documento tiene menos de 500 palabras. Te sugerimos expandir tu marco teórico y estado del arte.")
@@ -474,7 +560,7 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         has_biblio = "bibliografía" in text_lower or "referencias" in text_lower
         
         if has_intro and has_method and has_biblio:
-            academic_alignment += 15
+            academic_alignment += 30
             positive_feedback.append("Estructura impecable. Las secciones clave (Introducción, Metodología, Bibliografía) están presentes.")
             
         if not ("conclusiones" in text_lower or "resultados esperados" in text_lower):
@@ -486,11 +572,11 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         if not ("objetivo" in text_lower):
             areas_of_improvement.append("No se encontró una sección explícita de 'Objetivos'. Recuerda definir tu Objetivo General y Específicos.")
         else:
-            academic_alignment += 10
+            academic_alignment += 20
             
         # 2. Análisis de Rigor Académico (Citas)
         if has_biblio:
-            academic_alignment += 15
+            academic_alignment += 20
         else:
             areas_of_improvement.append("No se detectó la sección de 'Bibliografía'. Una propuesta sin sustento teórico puede ser rechazada.")
             
@@ -508,7 +594,8 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
             areas_of_improvement.insert(0, f"Riesgo de colisión alto ({round(max_similitud_pct)}%). La idea central coincide fuertemente con el proyecto '{top_project}' de la generación anterior. ¡Cuidado con el plagio!")
         elif max_similitud_pct > 20:
             collision_risk_level = "Medio"
-            areas_of_improvement.insert(0, "Similitud moderada. Tu proyecto comparte tecnologías o metodologías con propuestas del semestre pasado. Asegúrate de destacar tu diferenciador.")
+            top_project = similar_projects[0]["title"].replace("PROYECTO_", "") if similar_projects else "otro proyecto"
+            areas_of_improvement.insert(0, f"Similitud moderada. Tu proyecto comparte tecnologías o metodologías con el proyecto '{top_project}' del semestre pasado. Asegúrate de destacar tu diferenciador.")
         else:
             collision_risk_level = "Bajo"
             if max_similitud_pct < 5:
@@ -554,49 +641,163 @@ async def get_draft_proposal(user_id: str):
             return {"status": "not_found"}
     return {"status": "not_found"}
 
-@router.post("/analyze-draft-proposal")
-async def analyze_draft_proposal(user_id: str = Form(...)):
-    draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
-    if not os.path.exists(draft_path):
-        raise HTTPException(status_code=404, detail="No se encontró borrador para este usuario.")
-        
+@router.get("/analysis-status/{user_id}")
+async def get_analysis_status(user_id: str):
+    """
+    Devuelve la fase exacta de análisis en tiempo real para la app móvil.
+    """
+    if user_id in analysis_progress_store:
+        return analysis_progress_store[user_id]
+    return {"phase": 1, "message": "Procesando propuesta..."}
+
+async def _run_analysis_background(user_id: str, draft_path: str):
+    """
+    Tarea background que ejecuta el análisis exhaustivo con el LLM.
+    Guarda el resultado en analysis_result_store para que el cliente lo recupere
+    via GET /analysis-result/{user_id} sin estar bloqueado por el gateway.
+    """
     try:
-        with open(draft_path, "r", encoding="utf-8") as f:
-            draft_data = json.load(f)
-            
-        chunks = draft_data.get("chunks", [])
-        similar_projects = draft_data.get("similar_projects", [])
-        proposal_text = " ".join(chunks)
+        active_analysis_tasks[user_id] = asyncio.current_task()
         
-        if not ollama_service.check_health():
-             return {
-                 "status": "warning",
-                 "message": "Ollama no está respondiendo en localhost:11434.",
-                 "similar_projects": [p["title"] for p in similar_projects]
-             }
+        if analysis_lock.locked():
+            analysis_progress_store[user_id] = {
+                "phase": 5,
+                "message": "En cola de espera: Hay otro análisis de IA en curso. Tu turno comenzará en un momento..."
+            }
 
-        llm_verdict = ollama_service.analyze_originality(
-            proposal_text=proposal_text,
-            similar_projects=similar_projects
-        )
+        async with analysis_lock:
+            analysis_progress_store[user_id] = {"phase": 5, "message": "Calculando riesgo de colisión..."}
 
-        # Eliminar borrador tras éxito
-        try:
-            os.remove(draft_path)
-        except:
-            pass
+            with open(draft_path, "r", encoding="utf-8") as f:
+                draft_data = json.load(f)
 
-        return {
-            "status": "success",
-            "message": "Análisis completado con Phi-3 Mini",
-            "similar_projects_found": len(similar_projects),
-            "ollama_analysis": llm_verdict
-        }
+            chunks = draft_data.get("chunks", [])
+            similar_projects = draft_data.get("similar_projects", [])
+            quick_analysis = draft_data.get("quick_analysis", {})
 
+            # Smart Truncation — cap a 12,000 chars
+            full_proposal_text = " ".join(chunks)
+            proposal_text = full_proposal_text[:12000] if len(full_proposal_text) > 12000 else full_proposal_text
+
+            max_sim_pct = quick_analysis.get("collision_risk_pct", 0.0)
+            top_project_name = similar_projects[0]["title"] if similar_projects else "Ninguno"
+            risk_level = "Alto" if max_sim_pct > 50 else ("Medio" if max_sim_pct > 20 else "Bajo")
+
+            if not ollama_service.check_health():
+                analysis_result_store[user_id] = {
+                    "status": "warning",
+                    "message": "El motor de IA no está disponible en este momento.",
+                    "similar_projects": [p["title"] for p in similar_projects]
+                }
+                analysis_progress_store[user_id] = {"phase": -1, "message": "El motor de IA no está disponible."}
+                return
+
+            analysis_progress_store[user_id] = {"phase": 6, "message": "El comité académico está redactando el dictamen..."}
+
+            llm_verdict = ollama_service.analyze_originality(
+                proposal_text=proposal_text,
+                similar_projects=similar_projects,
+                max_sim_pct=round(max_sim_pct, 1),
+                risk_level=risk_level,
+                project_name="PROPUESTA_DEL_ALUMNO",
+                top_project_name=top_project_name,
+            )
+
+            analysis_progress_store[user_id] = {"phase": 7, "message": "Generando recomendaciones técnicas..."}
+
+            try:
+                os.remove(draft_path)
+            except:
+                pass
+
+            analysis_progress_store[user_id] = {"phase": 8, "message": "Afinando veredicto final..."}
+
+            # Guardar resultado final y marcar como completo (phase 9)
+            final_result = {
+                "status": "success",
+                "message": "Análisis completado con Llama 3.2 3B",
+                "similar_projects_found": len(similar_projects),
+                "ollama_analysis": llm_verdict
+            }
+            analysis_result_store[user_id] = final_result
+            analysis_progress_store[user_id] = {"phase": 9, "message": "Análisis completado. Recuperando resultado..."}
+
+    except asyncio.CancelledError:
+        print(f"BACKGROUND TASK: Análisis para {user_id} cancelado explícitamente.")
+        analysis_progress_store.pop(user_id, None)
+        analysis_result_store.pop(user_id, None)
+        raise # Rethrow para que asyncio lo limpie
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        analysis_progress_store[user_id] = {"phase": -1, "message": f"Error en el análisis: {str(e)}"}
+    finally:
+        active_analysis_tasks.pop(user_id, None)
+
+
+@router.post("/analyze-draft-proposal")
+async def analyze_draft_proposal(user_id: str = Form(...)):
+    """
+    Inicia el análisis exhaustivo de forma NO-BLOQUEANTE (Fire & Store).
+    Responde inmediatamente con status 'queued'. El cliente debe hacer polling
+    a /analysis-status/{user_id} y cuando phase==9, llamar a
+    GET /analysis-result/{user_id} para recuperar el resultado final.
+    """
+    draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+    if not os.path.exists(draft_path):
+        raise HTTPException(status_code=404, detail="No se encontró borrador para este usuario.")
+
+    # Limpiar resultados anteriores
+    analysis_result_store.pop(user_id, None)
+    analysis_progress_store[user_id] = {"phase": 5, "message": "Iniciando análisis en segundo plano..."}
+
+    # Lanzar la tarea en background — NO bloquea el gateway
+    asyncio.create_task(_run_analysis_background(user_id, draft_path))
+
+    return {
+        "status": "queued",
+        "message": "Análisis iniciado en segundo plano. Usa /analysis-status/{user_id} para seguir el progreso."
+    }
+
+
+@router.get("/analysis-result/{user_id}")
+async def get_analysis_result(user_id: str):
+    """
+    Devuelve el resultado final del análisis exhaustivo cuando está listo (phase==9).
+    El cliente debe llamar a este endpoint solo cuando el polling indique phase==9.
+    """
+    if user_id in analysis_result_store:
+        result = analysis_result_store.pop(user_id)  # Consumir y limpiar
+        analysis_progress_store.pop(user_id, None)
+        return result
+
+    phase_info = analysis_progress_store.get(user_id, {})
+    if phase_info.get("phase") == -1:
+        return {"status": "error", "message": phase_info.get("message", "Error desconocido en el análisis.")}
+
+    return {"status": "pending", "message": "El análisis aún está en progreso."}
+
+@router.post("/cancel-analysis/{user_id}")
+async def cancel_analysis(user_id: str):
+    """
+    Cancela un análisis en curso para liberar la cola y descartar resultados.
+    """
+    task = active_analysis_tasks.get(user_id)
+    if task and not task.done():
+        task.cancel()
+        
+    analysis_progress_store.pop(user_id, None)
+    analysis_result_store.pop(user_id, None)
+    
+    # Intentar limpiar el archivo de borrador si existe
+    draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+    try:
+        if os.path.exists(draft_path):
+            os.remove(draft_path)
+    except Exception:
+        pass
+        
+    return {"status": "success", "message": "Análisis cancelado exitosamente."}
 
 @router.post("/analyze-proposal-phi3")
 async def analyze_proposal_phi3(file: UploadFile = File(...)):

@@ -23,7 +23,9 @@ class LlmClient:
         except Exception:
             return False
 
-    def analyze_originality(self, proposal_text: str, similar_projects: list) -> dict:
+    def analyze_originality(self, proposal_text: str, similar_projects: list,
+                             max_sim_pct: float = 0.0, risk_level: str = "Bajo",
+                             project_name: str = "NUEVA_PROPUESTA", top_project_name: str = "Ninguno") -> dict:
         """
         Delega el análisis de originalidad al microservicio LLM.
         Mantiene la misma interfaz que el antiguo ollama_service.py.
@@ -35,8 +37,12 @@ class LlmClient:
                 json={
                     "proposal_text": proposal_text,
                     "similar_projects": similar_projects,
+                    "max_sim_pct": max_sim_pct,
+                    "risk_level": risk_level,
+                    "project_name": project_name,
+                    "top_project_name": top_project_name,
                 },
-                timeout=900,
+                timeout=150,
             )
 
             if response.status_code == 503:
