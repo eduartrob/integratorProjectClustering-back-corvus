@@ -25,21 +25,64 @@ analysis_result_store = {}   # Almacena el resultado final del análisis exhaust
 active_analysis_tasks = {}   # Almacena las asyncio.Task activas para poder cancelarlas
 analysis_lock = asyncio.Lock()
 
-# ─── Palabras clave para validar tipo de documento ───────────────────────────
-_KW_PROPUESTA   = {"objetivo", "propuesta", "alcance", "justificación", "justificacion", "planteamiento", "antecedentes"}
-_KW_TECNICO     = {"sistema", "aplicación", "aplicacion", "app", "implementar", "desarrollar", "tecnología", "tecnologia", "software", "hardware", "algoritmo", "modelo", "api", "base de datos"}
-_KW_ACADEMICO   = {"metodología", "metodologia", "marco teórico", "marco teorico", "hipótesis", "hipotesis", "bibliografía", "bibliografia", "referencias", "resultados esperados", "conclusiones"}
-_KW_UNIVERSIDAD = {"proyecto integrador", "proyecto de residencia", "tesis", "ingeniería", "ingenieria", "universidad", "upchiapas", "titulación", "titulacion", "residencia profesional"}
+# ─── Validación de Secciones de Proyecto Integrador ─────────────────────────
+# Secciones MANDATORIAS: si falta al menos una → rechazo inmediato (posible archivo incorrecto)
+_MANDATORY_SECTIONS = [
+    {
+        "name": "Objetivo General",
+        "keywords": ["objetivo general"],
+    },
+    {
+        "name": "Justificación o Problemática",
+        "keywords": ["justificación", "justificacion", "problemática", "problematica", "planteamiento del problema"],
+    },
+    {
+        "name": "Alcance o Funcionalidades",
+        "keywords": ["alcance", "funcionalidades", "lista de funcionalidades", "entregables"],
+    },
+]
 
-def _score_document_relevance(text: str) -> int:
-    """Devuelve un score 0-100 basado en presencia de palabras clave académicas."""
+# Secciones OPCIONALES: aportan puntos de calidad, no bloquean
+_OPTIONAL_SECTIONS = [
+    {"name": "Objetivos Específicos",  "keywords": ["objetivos específicos", "objetivos especificos"], "points": 15},
+    {"name": "Introducción",           "keywords": ["introducción", "introduccion"],                  "points": 10},
+    {"name": "Metodología",            "keywords": ["metodología", "metodologia"],                    "points": 10},
+    {"name": "Stack / Tecnologías",    "keywords": ["tecnologías", "tecnologias", "stack tecnológico", "lista de tecnologías"], "points": 10},
+    {"name": "Usuarios Finales",       "keywords": ["usuarios finales", "usuario final"],              "points": 10},
+    {"name": "Resumen o Abstract",     "keywords": ["resumen", "abstract"],                           "points":  5},
+    {"name": "Categoría / Área",       "keywords": ["categoría", "categoria", "área", "area"],        "points":  5},
+    {"name": "Bibliografía",           "keywords": ["bibliografía", "bibliografia", "referencias"],   "points":  5},
+]
+
+def _validate_project_sections(text: str) -> dict:
+    """
+    Valida que el documento contenga las secciones mínimas de un proyecto integrador.
+
+    Retorna un dict con:
+      - ok (bool): True si el documento pasa la validación.
+      - missing_mandatory (list[str]): Secciones críticas ausentes.
+      - optional_score (int): Puntuación de secciones opcionales encontradas (0-70).
+      - found_optional (list[str]): Secciones opcionales detectadas.
+    """
     t = text.lower()
-    score = 0
-    if sum(1 for kw in _KW_PROPUESTA   if kw in t) >= 2: score += 25
-    if sum(1 for kw in _KW_TECNICO     if kw in t) >= 2: score += 25
-    if sum(1 for kw in _KW_ACADEMICO   if kw in t) >= 2: score += 25
-    if sum(1 for kw in _KW_UNIVERSIDAD if kw in t) >= 1: score += 25
-    return score
+    missing_mandatory = []
+    for section in _MANDATORY_SECTIONS:
+        if not any(kw in t for kw in section["keywords"]):
+            missing_mandatory.append(section["name"])
+
+    optional_score = 0
+    found_optional = []
+    for section in _OPTIONAL_SECTIONS:
+        if any(kw in t for kw in section["keywords"]):
+            optional_score += section["points"]
+            found_optional.append(section["name"])
+
+    return {
+        "ok": len(missing_mandatory) == 0,
+        "missing_mandatory": missing_mandatory,
+        "optional_score": min(optional_score, 70),
+        "found_optional": found_optional,
+    }
 
 
 
@@ -481,16 +524,18 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
                 detail="El documento no parece ser una propuesta de proyecto integrador. No se pudo extraer texto (podría ser un documento escaneado o contener muy poco texto)."
             )
 
-        # ── Validador de tipo de documento ─────────────────────────────────────
-        doc_score = _score_document_relevance(full_text)
-        # Se requiere al menos un score de 50 para pasar la prueba (ej. mención de universidad + estructura de propuesta)
-        if doc_score < 50:
+        # ── Validador de Secciones Mandatorias ──────────────────────────────────
+        section_check = _validate_project_sections(full_text)
+        if not section_check["ok"]:
+            missing = ", ".join(f"'{s}'" for s in section_check["missing_mandatory"])
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "El documento no parece ser una propuesta de proyecto integrador. "
-                    "Asegúrate de subir tu propuesta con secciones como Objetivo, Metodología y Tecnologías. "
-                    f"(Score de relevancia: {doc_score}/100)"
+                    f"El documento no parece ser un proyecto integrador. "
+                    f"¿Quizás subiste el archivo equivocado? "
+                    f"No se encontraron las secciones obligatorias: {missing}. "
+                    f"Un proyecto integrador debe incluir al menos: "
+                    f"'Objetivo General', 'Justificación/Problemática' y 'Alcance'."
                 )
             )
 
@@ -833,6 +878,21 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
                     
         if not full_text:
             raise HTTPException(status_code=400, detail="No se pudo extraer texto del documento.")
+
+        # ── Validador de Secciones Mandatorias (Validación Final) ────────────────
+        section_check = _validate_project_sections(full_text)
+        if not section_check["ok"]:
+            missing = ", ".join(f"'{s}'" for s in section_check["missing_mandatory"])
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"El documento no parece ser un proyecto integrador. "
+                    f"¿Quizás subiste el archivo equivocado? "
+                    f"No se encontraron las secciones obligatorias: {missing}. "
+                    f"Un proyecto integrador debe incluir al menos: "
+                    f"'Objetivo General', 'Justificación/Problemática' y 'Alcance'."
+                )
+            )
 
         # SEGURIDAD RASP: Detectar Inyección de Prompt
         if nlp_service.detect_prompt_injection(full_text):
