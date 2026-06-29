@@ -434,18 +434,20 @@ os.makedirs(DRAFTS_DIR, exist_ok=True)
 @router.post("/pre-validate-proposal")
 async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = File(...)):
     
-    try:
-        filename_lower = file.filename.lower()
-        if not filename_lower.endswith(('.pdf', '.md', '.txt')):
-            raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
-            
-        file_bytes = await file.read()
-        full_text = ""
-        if filename_lower.endswith('.pdf'):
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            full_text = pymupdf4llm.to_markdown(doc)
-        else:
-            full_text = file_bytes.decode('utf-8')
+    file_bytes = await file.read()
+    filename_lower = file.filename.lower()
+    
+    def _cpu_bound():
+        try:
+            if not filename_lower.endswith(('.pdf', '.md', '.txt')):
+                raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
+                
+            full_text = ""
+            if filename_lower.endswith('.pdf'):
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                full_text = pymupdf4llm.to_markdown(doc)
+            else:
+                full_text = file_bytes.decode('utf-8')
                     
         if not full_text or len(full_text.strip()) < 50:
             raise HTTPException(
@@ -517,6 +519,12 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
                     "similarity_pct": similitud_pct
                 })
 
+        return full_text, max_similitud_pct, similar_projects
+
+    try:
+        import asyncio
+        full_text, max_similitud_pct, similar_projects = await asyncio.to_thread(_cpu_bound)
+        
         words_count = len(full_text.split())
         academic_alignment = 10
         areas_of_improvement = []
