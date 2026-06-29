@@ -28,15 +28,15 @@ analysis_lock = asyncio.Lock()
 _MANDATORY_SECTIONS = [
     {
         "name": "Metas u Objetivos",
-        "keywords": ["objetivo general", "propósito", "metas", "visión", "misión", "qué buscamos", "solución propuesta", "propuesta de valor"],
+        "keywords": ["objetivo", "objetivos", "propósito", "metas", "visión", "misión", "qué buscamos", "solución propuesta", "propuesta de valor", "optimización"],
     },
     {
         "name": "Justificación o Problemática",
-        "keywords": ["justificación", "justificacion", "problemática", "problematica", "planteamiento del problema", "contexto del problema", "necesidad", "situación actual", "por qué"],
+        "keywords": ["justificación", "justificacion", "problemática", "problematica", "planteamiento del problema", "contexto", "necesidad", "situación actual", "por qué", "descripción del proyecto", "descripcion"],
     },
     {
         "name": "Alcance o Requerimientos Técnicos",
-        "keywords": ["alcance", "funcionalidades", "lista de funcionalidades", "entregables", "límites", "requerimientos", "requisitos", "casos de uso", "historias de usuario", "arquitectura", "diseño del sistema"],
+        "keywords": ["alcance", "funcionalidades", "entregables", "límites", "requerimientos", "requisitos", "casos de uso", "arquitectura", "diseño del sistema", "variables", "entradas", "salidas", "datos", "dataset", "base de conocimientos", "modelo"],
     },
 ]
 
