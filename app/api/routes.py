@@ -856,14 +856,17 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
 
         proposal_text = " ".join(chunks)
         
-        if not ollama_service.check_health():
+        import asyncio
+        is_healthy = await asyncio.to_thread(ollama_service.check_health)
+        if not is_healthy:
              return {
                  "status": "warning",
-                 "message": "Pipeline completado hasta Fase 4. Ollama no está respondiendo en localhost:11434.",
+                 "message": "Pipeline completado hasta Fase 4. El microservicio de LLM no está respondiendo.",
                  "similar_projects": [p["title"] for p in similar_projects]
              }
 
-        llm_verdict = ollama_service.analyze_originality(
+        llm_verdict = await asyncio.to_thread(
+            ollama_service.analyze_originality,
             proposal_text=proposal_text,
             similar_projects=similar_projects
         )
