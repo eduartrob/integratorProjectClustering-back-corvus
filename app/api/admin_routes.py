@@ -108,6 +108,7 @@ from pydantic import BaseModel
 
 class ConfigUpdateRequest(BaseModel):
     allowed_extensions: list[str]
+    llm_provider: str = "ollama"
 
 @router.get("/config")
 async def get_system_config():
@@ -117,7 +118,10 @@ async def get_system_config():
 @router.post("/config")
 async def update_system_config(request: ConfigUpdateRequest):
     
-    new_config = {"allowed_extensions": request.allowed_extensions}
+    new_config = {
+        "allowed_extensions": request.allowed_extensions,
+        "llm_provider": request.llm_provider
+    }
     success = config_manager.save_config(new_config)
     if success:
         return {"message": "Configuración actualizada con éxito.", "config": new_config}

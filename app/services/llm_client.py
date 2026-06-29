@@ -21,9 +21,12 @@ class LlmClient:
     def analyze_originality(self, proposal_text: str, similar_projects: list,
                              max_sim_pct: float = 0.0, risk_level: str = "Bajo",
                              project_name: str = "NUEVA_PROPUESTA", top_project_name: str = "Ninguno") -> dict:
-        
         try:
-            logger.info(f"[LlmClient] Enviando propuesta a {LLM_SERVICE_URL}/api/v1/llm/analyze-proposal")
+            from app.core.config_manager import config_manager
+            current_config = config_manager.get_config()
+            llm_provider = current_config.get("llm_provider", "ollama")
+
+            logger.info(f"[LlmClient] Enviando propuesta a {LLM_SERVICE_URL}/api/v1/llm/analyze-proposal (Provider: {llm_provider})")
             response = requests.post(
                 f"{LLM_SERVICE_URL}/api/v1/llm/analyze-proposal",
                 json={
@@ -33,6 +36,7 @@ class LlmClient:
                     "risk_level": risk_level,
                     "project_name": project_name,
                     "top_project_name": top_project_name,
+                    "provider": llm_provider,
                 },
                 timeout=150,
             )
