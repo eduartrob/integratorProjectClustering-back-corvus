@@ -151,6 +151,22 @@ for i, lbl in enumerate(unique_labels):
     lname  = f"Ruido/Océano Azul ({m.sum()})" if lbl == -1 else f"Clúster {lbl} ({m.sum()})"
     axes[0].scatter(embeddings_2d[m, 0], embeddings_2d[m, 1],
                     c=[color], marker=marker, s=100, alpha=0.85, label=lname, linewidths=1.5)
+    
+    # Add density clouds (KDE) for clusters (ignore noise)
+    if lbl != -1 and m.sum() > 3:
+        try:
+            sns.kdeplot(
+                x=embeddings_2d[m, 0],
+                y=embeddings_2d[m, 1],
+                ax=axes[0],
+                fill=True,
+                color=color,
+                alpha=0.25,
+                levels=4,
+                thresh=0.05
+            )
+        except Exception:
+            pass # Ignore singular matrix errors in KDE for very tight clusters
 
 axes[0].set_title("Mapa Semántico — Clústeres HDBSCAN", fontweight="bold", fontsize=13)
 axes[0].legend(loc="best", fontsize=8)
@@ -163,6 +179,24 @@ cat2color   = {c: cmap2(i) for i, c in enumerate(unique_cats)}
 colors_cat  = [cat2color[c] for c in labels_raw]
 
 axes[1].scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], c=colors_cat, s=100, alpha=0.85)
+
+# Add density clouds for domains
+for c_name in unique_cats:
+    m = np.array(labels_raw) == c_name
+    if m.sum() > 3:
+        try:
+            sns.kdeplot(
+                x=embeddings_2d[m, 0],
+                y=embeddings_2d[m, 1],
+                ax=axes[1],
+                fill=True,
+                color=cat2color[c_name],
+                alpha=0.2,
+                levels=4,
+                thresh=0.1
+            )
+        except Exception:
+            pass
 patches = [mpatches.Patch(color=cat2color[c], label=c) for c in unique_cats]
 axes[1].legend(handles=patches, loc="best", fontsize=8)
 axes[1].set_title("Mapa Semántico — Dominios Reales", fontweight="bold", fontsize=13)
