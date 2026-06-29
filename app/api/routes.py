@@ -15,6 +15,7 @@ from app.services.chroma_service import chroma_service
 from app.services.cluster_logic import cluster_logic
 from app.services.rabbitmq_service import rabbitmq_service
 from app.services.llm_client import llm_client as ollama_service
+from app.services.inference_log_service import log_inference, get_history
 
 router = APIRouter()
 
@@ -661,6 +662,19 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
             "areas_of_improvement": areas_of_improvement
         }
 
+        # ── Auditoría: registrar la inferencia en SQLite ────────────────────────
+        try:
+            log_inference(
+                user_id=user_id,
+                filename=file.filename,
+                score_colision=max_similitud_pct,
+                nivel_riesgo=collision_risk_level,
+                academic_alignment=min(100, academic_alignment),
+                secciones_opcionales=section_check.get("found_optional", []),
+            )
+        except Exception as log_err:
+            print(f"[WARN] No se pudo guardar en inference_log: {log_err}")
+
         # Guardar Draft
         draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
         draft_data = {
@@ -677,6 +691,15 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/inference-history")
+async def inference_history(limit: int = 50, offset: int = 0):
+    """
+    Devuelve el historial paginado de inferencias para el panel de administración.
+    Cada entrada incluye: user_id, timestamp, archivo analizado, score de colisión,
+    nivel de riesgo y alineación académica.
+    """
+    return get_history(limit=limit, offset=offset)
 
 @router.get("/draft-proposal/{user_id}")
 async def get_draft_proposal(user_id: str):
