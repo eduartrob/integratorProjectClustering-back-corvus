@@ -618,7 +618,8 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[ERROR] Error interno en pre_validate_proposal: {str(e)}")
+        raise HTTPException(status_code=500, detail="El servidor no está disponible en este momento. Por favor, contacta a soporte.")
 
 @router.get("/inference-history")
 async def inference_history(limit: int = 50, offset: int = 0):
