@@ -8,6 +8,7 @@ import io
 import os
 import json
 import numpy as np
+import httpx
 
 from app.services.drive_service import drive_service
 from app.services.nlp_service import nlp_service
@@ -603,6 +604,26 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
             )
         except Exception as log_err:
             print(f"[WARN] No se pudo guardar en inference_log: {log_err}")
+
+        # Registrar eventos en ActivityLog centralizado (fuego y olvido)
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post("http://corvus_auth_service:3001/admin/activity", json={
+                    "userId": user_id,
+                    "action": "UPLOAD_DOCUMENT",
+                    "detail": f"Proyecto: {file.filename}",
+                    "ipAddress": "127.0.0.1"
+                }, timeout=3.0)
+                
+                if collision_risk_level in ["Alto", "Medio"] or max_similitud_pct > 30:
+                    await client.post("http://corvus_auth_service:3001/admin/activity", json={
+                        "userId": None,
+                        "action": "SYSTEM_ALERT",
+                        "detail": f"Riesgo {collision_risk_level} ({max_similitud_pct}%) en {file.filename}",
+                        "ipAddress": "127.0.0.1"
+                    }, timeout=3.0)
+        except Exception as e:
+            print(f"[WARN] No se pudo registrar actividad en auth-service: {e}")
 
         draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
         draft_data = {
