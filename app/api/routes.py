@@ -438,17 +438,16 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
     filename_lower = file.filename.lower()
     
     def _cpu_bound():
-        try:
-            if not filename_lower.endswith(('.pdf', '.md', '.txt')):
-                raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
+        if not filename_lower.endswith(('.pdf', '.md', '.txt')):
+            raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
+            
+        full_text = ""
+        if filename_lower.endswith('.pdf'):
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            full_text = pymupdf4llm.to_markdown(doc)
+        else:
+            full_text = file_bytes.decode('utf-8')
                 
-            full_text = ""
-            if filename_lower.endswith('.pdf'):
-                doc = fitz.open(stream=file_bytes, filetype="pdf")
-                full_text = pymupdf4llm.to_markdown(doc)
-            else:
-                full_text = file_bytes.decode('utf-8')
-                    
         if not full_text or len(full_text.strip()) < 50:
             raise HTTPException(
                 status_code=400, 
