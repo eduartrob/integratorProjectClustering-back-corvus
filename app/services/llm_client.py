@@ -28,7 +28,7 @@ class LlmClient:
 
             logger.info(f"[LlmClient] Enviando propuesta a {LLM_SERVICE_URL}/api/v1/llm/analyze-proposal (Provider: {llm_provider})")
             
-            async with httpx.AsyncClient(timeout=150.0) as client:
+            async with httpx.AsyncClient(timeout=None) as client:
                 response = await client.post(
                     f"{LLM_SERVICE_URL}/api/v1/llm/analyze-proposal",
                     json={
