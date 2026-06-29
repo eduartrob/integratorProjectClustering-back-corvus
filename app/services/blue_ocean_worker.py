@@ -64,7 +64,7 @@ class BlueOceanWorker:
                     else:
                         logger.warning(f"Worker: Falló el análisis para {niche_id}. Se reintentará luego.")
                         
-                await asyncio.sleep(10 if pending else 60)
+                await asyncio.sleep(1 if pending else 30)
                 
             except asyncio.CancelledError:
                 break
