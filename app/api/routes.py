@@ -518,11 +518,11 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
                     "similarity_pct": similitud_pct
                 })
 
-        return full_text, max_similitud_pct, similar_projects
+        return full_text, max_similitud_pct, similar_projects, section_check, chunks
 
     try:
         import asyncio
-        full_text, max_similitud_pct, similar_projects = await asyncio.to_thread(_cpu_bound)
+        full_text, max_similitud_pct, similar_projects, section_check, chunks = await asyncio.to_thread(_cpu_bound)
         
         words_count = len(full_text.split())
         academic_alignment = 10
