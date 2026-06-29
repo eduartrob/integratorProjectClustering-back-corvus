@@ -676,7 +676,9 @@ async def _run_analysis_background(user_id: str, draft_path: str):
 
             analysis_progress_store[user_id] = {"phase": 6, "message": "El comité académico está redactando el dictamen..."}
 
-            llm_verdict = ollama_service.analyze_originality(
+            await asyncio.sleep(0)
+            llm_verdict = await asyncio.to_thread(
+                ollama_service.analyze_originality,
                 proposal_text=proposal_text,
                 similar_projects=similar_projects,
                 max_sim_pct=round(max_sim_pct, 1),
