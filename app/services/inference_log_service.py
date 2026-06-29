@@ -17,7 +17,20 @@ def _get_conn() -> sqlite3.Connection:
 def _init_db():
     
     with _get_conn() as conn:
-        conn.execute()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS inference_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT,
+                timestamp REAL,
+                filename TEXT,
+                score_colision REAL,
+                nivel_riesgo TEXT,
+                academic_alignment INTEGER,
+                veredicto TEXT,
+                secciones_faltantes TEXT,
+                secciones_opcionales TEXT
+            )
+        """)
         conn.commit()
 
 def log_inference(
@@ -34,7 +47,12 @@ def log_inference(
     _init_db()
     with _get_conn() as conn:
         cursor = conn.execute(
-            ,
+            """
+            INSERT INTO inference_log (
+                user_id, timestamp, filename, score_colision, nivel_riesgo, 
+                academic_alignment, veredicto, secciones_faltantes, secciones_opcionales
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
                 user_id,
                 time.time(),
@@ -56,7 +74,7 @@ def get_history(limit: int = 50, offset: int = 0) -> dict:
     with _get_conn() as conn:
         total = conn.execute("SELECT COUNT(*) FROM inference_log").fetchone()[0]
         rows = conn.execute(
-            ,
+            "SELECT * FROM inference_log ORDER BY timestamp DESC LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
 
