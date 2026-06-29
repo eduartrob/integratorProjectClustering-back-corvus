@@ -7,7 +7,6 @@ logger = logging.getLogger(__name__)
 
 class ConfigManager:
     def __init__(self):
-        # Usamos la ruta persistente de Chroma para guardar también la configuración
         self.config_path = os.path.join(settings.CHROMA_DB_PATH, 'app_config.json')
         self._ensure_default_config()
 

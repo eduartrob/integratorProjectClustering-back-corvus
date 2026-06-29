@@ -7,7 +7,6 @@ from app.api.routes import analysis_lock
 
 logger = logging.getLogger(__name__)
 
-# URL del LLM Service (interno en la red de Docker)
 LLM_SERVICE_URL = "http://llm-service:3003/api/v1/llm/analyze-blue-ocean"
 
 class BlueOceanWorker:
@@ -32,10 +31,8 @@ class BlueOceanWorker:
         
         while self._is_running:
             try:
-                # 1. Obtener nichos pendientes
                 pending = blue_ocean_db.get_pending_niches()
                 
-                # 1.5 Auto-descubrimiento proactivo: Si no hay pendientes, escanear ChromaDB
                 if not pending:
                     try:
                         results = chroma_service.collection.get(include=["metadatas"])
@@ -44,44 +41,36 @@ class BlueOceanWorker:
                                 if meta and meta.get('is_blue_ocean'):
                                     p_id = meta.get('project_id')
                                     if p_id:
-                                        # Esto lo añade a la DB como "pending" si no existía antes
                                         blue_ocean_db.register_niche_if_not_exists(p_id)
                                         
-                        # Volver a checar la lista después del escaneo
                         pending = blue_ocean_db.get_pending_niches()
                     except Exception as e:
                         logger.error(f"Worker: Error escaneando ChromaDB para auto-descubrimiento: {e}")
                 
                 if pending:
-                    # Procesamos solo uno por ciclo para no saturar Ollama
                     niche_id = pending[0]
                     logger.info(f"Worker: Procesando análisis para el nicho {niche_id}")
                     
-                    # Reconstruir metadatos
                     title = niche_id.replace('proyecto_', '').replace('.md', '').replace('.pdf', '').replace('_', ' ').title()
                     description = "Nicho inexplorado detectado por baja colisión semántica."
                     category = "INNOVACIÓN ACADÉMICA"
                     
-                    # 2. Llamar al LLM Service (protegido por el lock global para no interrumpir a los usuarios)
                     async with analysis_lock:
                         analysis_data = await self._call_llm_service(title, description, category)
                     
                     if analysis_data:
-                        # 3. Guardar en BD
                         blue_ocean_db.update_analysis(niche_id, analysis_data)
                         logger.info(f"Worker: Análisis completado y guardado para {niche_id}")
                     else:
                         logger.warning(f"Worker: Falló el análisis para {niche_id}. Se reintentará luego.")
                         
-                # Esperar antes del siguiente ciclo. 
-                # Si hay pendientes, espera poco (10s), si no hay, espera más (60s)
                 await asyncio.sleep(10 if pending else 60)
                 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error en Blue Ocean Worker loop: {e}")
-                await asyncio.sleep(30) # Pausa por error
+                await asyncio.sleep(30)
 
     async def _call_llm_service(self, title: str, description: str, category: str) -> dict:
         payload = {

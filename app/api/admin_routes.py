@@ -6,10 +6,7 @@ router = APIRouter()
 
 @router.get("/clusters-3d", response_class=HTMLResponse, tags=["Admin Panel"])
 async def get_clusters_3d_html():
-    """
-    Genera y devuelve la grafica 3D interactiva de los clusters.
-    Se utiliza para incrustarla en un <iframe> dentro del panel de administrador.
-    """
+    
     try:
         html_content = visualization_service.generate_3d_html()
         if "<h1>Error" in html_content:
@@ -20,9 +17,7 @@ async def get_clusters_3d_html():
 
 @router.get("/clusters-2d", tags=["Admin Panel"])
 async def get_clusters_2d():
-    """
-    Devuelve las coordenadas UMAP 2D para renderizar la gráfica scatter (Recharts).
-    """
+    
     try:
         data = visualization_service.get_2d_scatter_data()
         return data
@@ -33,9 +28,7 @@ async def get_clusters_2d():
 
 @router.get("/clusters-stats", tags=["Admin Panel"])
 async def get_clusters_stats():
-    """
-    Devuelve las estadisticas basicas de los clusters para pintar tarjetas (KPIs) en el admin.
-    """
+    
     try:
         stats = visualization_service.get_cluster_stats()
         if "error" in stats:
@@ -48,9 +41,7 @@ async def get_clusters_stats():
 
 @router.get("/projects-count", tags=["Admin Panel"])
 async def get_projects_count():
-    """
-    Devuelve la cantidad total de proyectos subidos a la BD.
-    """
+    
     from app.services.chroma_service import chroma_service
     try:
         results = chroma_service.collection.get(include=["metadatas"])
@@ -64,24 +55,17 @@ async def get_projects_count():
 
 @router.get("/pending-projects-count", tags=["Admin Panel"])
 async def get_pending_projects_count():
-    """
-    Compara la cantidad total de proyectos en la base de datos relacional (Auth) 
-    versus los que ya están vectorizados en ChromaDB.
-    """
+    
     from app.services.chroma_service import chroma_service
     import requests
     from app.core.config import settings
     try:
-        # 1. Proyectos Vectorizados (En ChromaDB)
         results = chroma_service.collection.get(include=["metadatas"])
         if not results or not results['metadatas']:
             vectorized_count = 0
         else:
             vectorized_count = len(set(meta['project_id'] for meta in results['metadatas'] if 'project_id' in meta))
 
-        # 2. Proyectos Detectados Total (En PostgreSQL via Auth Service)
-        # NOTA ARQUITECTÓNICA: Como la tabla LinkedFolder actualmente no guarda el "total_files", 
-        # asumiremos temporalmente que están todos vectorizados para no romper el dashboard con números falsos.
         total_detected = vectorized_count
         pending_count = total_detected - vectorized_count
         
@@ -100,9 +84,7 @@ async def get_pending_projects_count():
 
 @router.post("/execute", tags=["Admin Panel"])
 async def execute_clustering(background_tasks: BackgroundTasks):
-    """
-    Ejecuta manualmente el algoritmo de clustering global.
-    """
+    
     from app.services.clustering_service import clustering_engine
     
     def run_clustering():
@@ -129,12 +111,12 @@ class ConfigUpdateRequest(BaseModel):
 
 @router.get("/config")
 async def get_system_config():
-    """Devuelve la configuración actual del microservicio (extensiones, etc.)"""
+    
     return config_manager.get_config()
 
 @router.post("/config")
 async def update_system_config(request: ConfigUpdateRequest):
-    """Actualiza las extensiones permitidas (.pdf, .md, .txt)"""
+    
     new_config = {"allowed_extensions": request.allowed_extensions}
     success = config_manager.save_config(new_config)
     if success:
@@ -143,10 +125,7 @@ async def update_system_config(request: ConfigUpdateRequest):
 
 @router.get("/recent-projects", tags=["Admin Panel"])
 async def get_recent_projects(limit: int = 50):
-    """
-    Devuelve la lista del historial de proyectos extraída desde ChromaDB.
-    Se utiliza para la tabla del panel de administración.
-    """
+    
     from app.services.visualization_service import visualization_service
     from app.services.chroma_service import chroma_service
     try:
@@ -158,13 +137,11 @@ async def get_recent_projects(limit: int = 50):
             for meta in results['metadatas']:
                 p_id = meta.get('project_id')
                 if p_id and p_id not in unique_projects:
-                    # Formatear el nombre (ej. 'proyecto_1' -> 'Proyecto 1')
                     name = p_id.replace('proyecto_', '').replace('_', ' ').title()
                     
                     status = "Vectorizado"
                     status_class = "bg-surface-variant text-on-surface-variant"
                     
-                    # Determinar el estado en base al clustering
                     if 'is_blue_ocean' in meta and meta['is_blue_ocean']:
                         status = "Océano Azul"
                         status_class = "bg-error-container/20 text-error"
@@ -187,7 +164,6 @@ async def get_recent_projects(limit: int = 50):
                     }
                     
         projects_list = list(unique_projects.values())
-        # Invertimos la lista para simular orden cronológico (los últimos agregados primero)
         projects_list.reverse()
         return projects_list[:limit]
     except Exception as e:

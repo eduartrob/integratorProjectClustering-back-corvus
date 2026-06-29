@@ -29,7 +29,6 @@ class ClusteringEngineService:
     def execute_global_clustering(self):
         print("Iniciando extracción desde ChromaDB...")
         
-        # --- 1. EXTRACCIÓN DE DATOS ---
         client = chromadb.PersistentClient(path=str(self.chroma_path))
         collection = client.get_collection("integrator_projects")
 
@@ -76,7 +75,6 @@ class ClusteringEngineService:
             force_retrain = True
 
         if force_retrain:
-            # --- 2. REDUCCIÓN INTERMEDIA PARA CLUSTERING (UMAP 20D) ---
             print("Reduciendo a 20D para HDBSCAN...")
             reducer_clustering = umap.UMAP(
                 n_components=20,
@@ -90,7 +88,6 @@ class ClusteringEngineService:
             joblib.dump(reducer_clustering, self.umap_model_path)
             print(f"Modelo UMAP guardado en: {self.umap_model_path}")
 
-            # --- 3. CLUSTERING (HDBSCAN) ---
             print("Entrenando HDBSCAN...")
             clusterer = hdbscan.HDBSCAN(
                 min_cluster_size=3,
@@ -109,7 +106,6 @@ class ClusteringEngineService:
         pct_noise = (n_noise / len(labels)) * 100
         print(f"Diagnóstico: {n_noise}/{len(labels)} proyectos ({pct_noise:.1f}%) fueron marcados como Océano Azul.")
 
-        # --- 4. ACTUALIZACIÓN DE CHROMADB ---
         print("Actualizando metadatos en ChromaDB...")
         for i, p_id in enumerate(unique_project_ids):
             label = int(labels[i])
@@ -131,7 +127,6 @@ class ClusteringEngineService:
             )
         print("¡Metadatos actualizados con éxito!")
 
-        # --- 5. GENERACIÓN DE TEMAS INEXPLORADOS ---
         print("Analizando clústeres para derivar temas inexplorados...")
         valid_labels = [l for l in labels if l != -1]
         unexplored_topics = []
@@ -151,7 +146,6 @@ class ClusteringEngineService:
         else:
             print("No se encontraron clústeres válidos para temas inexplorados.")
 
-        # --- 6. REDUCCIÓN DIMENSIONAL PARA VISUALIZACIÓN (UMAP 2D) ---
         print("Reduciendo dimensiones con UMAP a 2D SOLO para visualización...")
         reducer_viz = umap.UMAP(n_components=2, n_neighbors=10, min_dist=0.1, metric='euclidean', random_state=42)
         embeddings_2d = reducer_viz.fit_transform(embeddings_50d)
@@ -164,7 +158,6 @@ class ClusteringEngineService:
             'Num': range(1, len(unique_project_ids) + 1)
         })
 
-        # --- 7. RENDERIZADO VISUAL INTERACTIVO (PLOTLY) ---
         print("Generando gráfica interactiva 'clusters_interactivo.html'...")
         fig = go.Figure()
         unique_labels = set(labels)

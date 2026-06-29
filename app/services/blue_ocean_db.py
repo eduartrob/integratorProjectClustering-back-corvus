@@ -4,7 +4,6 @@ import time
 from datetime import datetime
 from typing import Dict, Any, List
 
-# Ruta local para persistir los estados y cachés de los Océanos Azules
 DB_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'blue_ocean_state.json')
 
 class BlueOceanDB:
@@ -52,15 +51,12 @@ class BlueOceanDB:
     def track_view(self, niche_id: str, viewer_avatar: str = None) -> Dict[str, Any]:
         niche = self.get_niche(niche_id)
         
-        # Incrementar contador
         niche["view_count"] += 1
         
-        # Añadir viewer si existe y no está ya al principio
         if viewer_avatar:
             if viewer_avatar in niche["recent_viewers"]:
                 niche["recent_viewers"].remove(viewer_avatar)
             niche["recent_viewers"].insert(0, viewer_avatar)
-            # Mantener solo los últimos 3
             niche["recent_viewers"] = niche["recent_viewers"][:3]
             
         self.state[niche_id] = niche

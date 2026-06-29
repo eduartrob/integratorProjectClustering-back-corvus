@@ -10,12 +10,9 @@ from app.services.blue_ocean_worker import blue_ocean_worker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     blue_ocean_worker.start()
     yield
-    # Shutdown
     blue_ocean_worker.stop()
-
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -23,7 +20,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

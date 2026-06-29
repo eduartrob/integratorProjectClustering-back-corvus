@@ -30,18 +30,13 @@ class ClusterLogic:
         ]
 
     def perform_clustering(self, embeddings: list[list[float]], n_clusters: int = 5):
-        """
-        Agrupa los vectores en 'n_clusters' utilizando KMeans.
-        Útil para categorizar automáticamente de qué tratan los proyectos del cuatrimestre.
-        """
+        
         if not embeddings or len(embeddings) < n_clusters:
             logger.warning("No hay suficientes datos para agrupar.")
             return None
 
-        # Convertimos a arreglo matemático de NumPy
         X = np.array(embeddings)
         
-        # Entrenamos el algoritmo K-Means
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
         kmeans.fit(X)
         
@@ -51,9 +46,7 @@ class ClusterLogic:
         }
 
     def find_blue_oceans(self, new_project_embedding: list[float], existing_embeddings: list[list[float]], existing_names: list[str] = None, threshold: float = 0.3):
-        """
-        Calcula la distancia (similitud) del nuevo proyecto respecto al historial y genera métricas para la UI.
-        """
+        
         if not existing_embeddings:
             return {
                 "is_blue_ocean": True,
@@ -76,25 +69,18 @@ class ClusterLogic:
         X_new = np.array([new_project_embedding])
         X_existing = np.array(existing_embeddings)
 
-        # Calculamos la distancia coseno
         distances = cosine_distances(X_new, X_existing)[0]
         
-        # Encontramos la distancia al proyecto que más se le parece
         min_distance = float(np.min(distances))
         is_blue_ocean = min_distance > threshold
         
-        # Obtenemos los 3 proyectos más cercanos
         closest_indices = np.argsort(distances)[:3]
         closest_projects = []
         if existing_names:
             closest_projects = [existing_names[i] for i in closest_indices if i < len(existing_names)]
             
-        # Calcular scores
-        # Distancia 0.0 -> Originality 0%
-        # Distancia >= 0.6 -> Originality 99%
         originality = min(int((min_distance / 0.6) * 100), 99)
         
-        # Valores simulados deterministas basados en el vector (para que no cambien en cada petición)
         data_av = 60 + (int(abs(sum(new_project_embedding[:5])) * 100) % 35)
         acad_rel = 70 + (int(abs(sum(new_project_embedding[5:10])) * 100) % 25)
         
@@ -125,10 +111,7 @@ class ClusterLogic:
         }
 
     def find_blue_oceans_hybrid(self, new_project_text: str, existing_texts: list[str], new_project_embedding: list[float], existing_embeddings: list[list[float]], existing_names: list[str] = None, threshold: float = 0.45):
-        """
-        Búsqueda Híbrida: Combina la distancia Semántica (Contexto/Sinónimos vía Dense Embeddings) 
-        con la distancia Léxica (Palabras Clave exclusivas vía TF-IDF).
-        """
+        
         if not existing_texts or not existing_embeddings:
             return self.find_blue_oceans(new_project_embedding, existing_embeddings, existing_names)
             
@@ -137,7 +120,6 @@ class ClusterLogic:
             nlp = spacy.load("es_core_news_md")
             spanish_stopwords = list(nlp.Defaults.stop_words)
         except:
-            # Fallback robusto en caso de que spacy falle
             spanish_stopwords = [
                 "el", "la", "los", "las", "un", "una", "unos", "unas", "y", "o", "pero", "si",
                 "por", "para", "como", "a", "ante", "bajo", "cabe", "con", "contra", "de", "desde",
@@ -149,7 +131,6 @@ class ClusterLogic:
                 "ni", "porque", "cuando", "donde", "quien", "quienes", "cual", "cuales"
             ]
             
-        # Siempre agregar palabras estorbo académicas, cargue spacy o no
         academic_stopwords = [
             "proyecto", "sistema", "estimado", "objetivo", "desarrollo", "desarrollar", "implementar",
             "implementación", "general", "específico", "específicos", "justificación", "conclusión",
@@ -158,7 +139,6 @@ class ClusterLogic:
         ]
         spanish_stopwords.extend(academic_stopwords)
         
-        # 1. Distancia Léxica (TF-IDF) -> Ignora plantillas
         vectorizer = TfidfVectorizer(stop_words=spanish_stopwords, max_df=0.8)
         all_texts = existing_texts + [new_project_text]
         tfidf_matrix = vectorizer.fit_transform(all_texts)
@@ -168,34 +148,24 @@ class ClusterLogic:
         
         tfidf_distances = cosine_distances(X_new_tfidf, X_existing_tfidf)[0]
         
-        # 2. Distancia Semántica (Vectores Densos) -> Atrapa sinónimos y cambios de tono
         X_new_dense = np.array([new_project_embedding])
         X_existing_dense = np.array(existing_embeddings)
         dense_distances = cosine_distances(X_new_dense, X_existing_dense)[0]
         
-        # 3. Fusión Híbrida con Peso ADAPTATIVO
-        # Damos prioridad al CONTEXTO (Dense) sobre el Conteo de Palabras (TF-IDF).
-        # Si el contexto es distinto aunque usen las mismas palabras, la red neuronal dominará.
-        divergence = tfidf_distances - dense_distances  # Positivo = Dense más cercano
+        divergence = tfidf_distances - dense_distances
         
-        # Base: 70% Contexto / 30% Palabras. Si hay divergencia (mismas palabras, distinto contexto),
-        # subimos la autoridad del contexto al 90% para evitar falsos positivos por palabras genéricas como "estimado".
         weight_dense = np.where(divergence > 0.20, 0.90, 0.70)
         weight_tfidf = 1.0 - weight_dense
         
         hybrid_distances = (dense_distances * weight_dense) + (tfidf_distances * weight_tfidf)
         
-        # Calculamos las métricas híbridas para encontrar al vecino más cercano
-        # y poder dar feedback preciso incluso si IsolationForest determinó que es un inlier.
         mean_dist = float(np.mean(hybrid_distances))
         std_dist  = float(np.std(hybrid_distances))
         min_hybrid_distance = float(np.min(hybrid_distances))
         closest_idx = int(np.argmin(hybrid_distances))
         
-        # Umbral estático solo para referencia en la UI
         effective_threshold = max(mean_dist - (1.8 * std_dist), 0.38)
         
-        # 4. Machine Learning: HDBSCAN para Anomalías y Clústeres
         from pathlib import Path
         import joblib
         import hdbscan
@@ -210,10 +180,8 @@ class ClusterLogic:
             reducer_clustering = joblib.load(umap_path)
             clusterer = joblib.load(hdbscan_path)
             
-            # 1. Reducir el nuevo proyecto a 50D usando el modelo UMAP guardado
             X_new_50d = reducer_clustering.transform(X_new_dense)
             
-            # 2. Predecir pertenencia a clústeres en 50D
             test_labels, strengths = hdbscan.approximate_predict(clusterer, X_new_50d)
             
             MIN_STRENGTH = 0.30
@@ -232,14 +200,11 @@ class ClusterLogic:
         if existing_names:
             closest_projects = [existing_names[i] for i in closest_indices if i < len(existing_names)]
 
-        # 5. Extraer las palabras clave que REALMENTE COMPARTEN los dos proyectos
-        # (términos con mayor TF-IDF en el proyecto nuevo que también aparecen en el más cercano)
         overlapping_keywords = []
         try:
             feature_names = vectorizer.get_feature_names_out()
             new_vec  = np.asarray(tfidf_matrix[-1].todense()).flatten()
             close_vec = np.asarray(tfidf_matrix[closest_idx].todense()).flatten()
-            # Términos con peso > 0 en AMBOS documentos (bajamos el umbral para atrapar textos muy cortos)
             shared_mask = (new_vec > 0.0) & (close_vec > 0.0)
             shared_scores = (new_vec + close_vec) * shared_mask
             top_shared = np.argsort(shared_scores)[-8:][::-1]
@@ -247,12 +212,9 @@ class ClusterLogic:
         except Exception as e:
             logger.warning(f"No se pudieron extraer keywords: {e}")
             
-        # 6. Calcular el porcentaje de similitud REAL (no hardcoded "50%")
         similarity_pct = max(0, int((1 - min_hybrid_distance) * 100))
         originality    = min(int(max((min_hybrid_distance - 0.30) / 0.30, 0) * 100), 99)
         
-        # Si HDBSCAN (IA Avanzada) decide que es Océano Azul pero la distancia clásica es corta,
-        # corregimos el porcentaje de originalidad para que sea coherente con el veredicto.
         if is_blue_ocean and originality < 80:
             originality = 80 + (int(min_hybrid_distance * 100) % 19)
         
@@ -284,7 +246,6 @@ class ClusterLogic:
                     f"Distancia híbrida: {min_hybrid_distance:.2f} (umbral: {effective_threshold:.2f})."
                 )
             
-        # Sugerencia dinámica para que no salga vacía si no hay keywords
         if not is_blue_ocean:
             if overlapping_keywords:
                 suggestion_desc = f"Tu proyecto comparte los conceptos '{', '.join(overlapping_keywords[:3])}' con '{closest_safe}'. Considera reforzar los elementos que te diferencian técnicamente."
@@ -293,7 +254,6 @@ class ClusterLogic:
         else:
             suggestion_desc = "Tu propuesta ocupa un espacio conceptual único. Documenta con detalle las características que la distinguen del estado del arte."
             
-        # Asignar nivel de riesgo
         if similarity_pct < 20:
             nivel_riesgo = "Bajo"
             desc_riesgo = "Originalidad alta. Similitudes encontradas solo en terminos estandar."
@@ -309,7 +269,7 @@ class ClusterLogic:
             "metricas_calidad": {
                 "rigor_academico": acad_rel,
                 "relevancia_tecnica": data_av,
-                "claridad_estructural": min(100, acad_rel + 5) # Simulado basado en el texto
+                "claridad_estructural": min(100, acad_rel + 5)
             },
             "riesgo_colision": {
                 "porcentaje": similarity_pct,
@@ -326,7 +286,6 @@ class ClusterLogic:
                     "descripcion": "La descripcion tecnica podria beneficiarse de mayor profundidad en la seleccion de herramientas."
                 }
             ],
-            # Mantenemos los campos raw por si se necesitan en otras vistas
             "is_blue_ocean": is_blue_ocean,
             "closest_projects": closest_projects,
             "unexplored_topics": self._get_unexplored_topics()

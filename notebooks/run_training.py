@@ -1,12 +1,4 @@
-"""
-Script de entrenamiento del modelo HDBSCAN + UMAP para Corvus.
-Equivale a ejecutar el notebook entrenamiento_hdbscan.ipynb completo.
-Genera las gráficas PNG y los artefactos .joblib.
 
-Uso:
-    cd notebooks/
-    python run_training.py
-"""
 
 import os
 import sys
@@ -18,7 +10,7 @@ from collections import Counter
 
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # Backend sin pantalla para servidores
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
@@ -30,11 +22,9 @@ from sklearn.preprocessing import normalize
 import umap
 import hdbscan
 
-# ────────────────────────────────────────────────────────────────
 RANDOM_SEED  = 42
-# Con 50 muestras: n_neighbors << 50, n_components << n_neighbors
-N_NEIGHBORS  = 5    # seguro para corpus de 50 docs
-N_COMPONENTS = 15   # reducción a 15D para HDBSCAN (mucho < n_neighbors no es requerido, pero sí razonable)
+N_NEIGHBORS  = 5
+N_COMPONENTS = 15
 MODELS_DIR   = Path(__file__).resolve().parent.parent / "app" / "models"
 FIGURES_DIR  = Path(__file__).resolve().parent / "figures"
 CORPUS_PATH  = Path("/home/eduartrob/Documentos/project9no/pruebas/corvus-backend-local/projectsTests")
@@ -43,12 +33,10 @@ np.random.seed(RANDOM_SEED)
 MODELS_DIR.mkdir(exist_ok=True)
 FIGURES_DIR.mkdir(exist_ok=True)
 
-# ────────────────────────────────────────────────────────────────
 print("=" * 60)
 print("  🦅 CORVUS — Entrenamiento HDBSCAN + UMAP")
 print("=" * 60)
 
-# ── 1. CARGA DEL CORPUS ─────────────────────────────────────────
 print("\n📂 Cargando corpus...")
 docs, labels_raw = [], []
 
@@ -60,7 +48,6 @@ for fp in sorted(CORPUS_PATH.glob("*.md")):
 print(f"   Proyectos cargados : {len(docs)}")
 print(f"   Categorías únicas  : {sorted(set(labels_raw))}")
 
-# ── 2. EDA — DISTRIBUCIÓN ───────────────────────────────────────
 print("\n📊 Generando gráfica de distribución...")
 category_counts = Counter(labels_raw)
 categories      = list(category_counts.keys())
@@ -82,7 +69,6 @@ plt.savefig(out_dist, dpi=120, bbox_inches="tight")
 plt.close()
 print(f"   ✅ Guardada: {out_dist}")
 
-# ── 3. VECTORIZACIÓN ─────────────────────────────────────────────
 print("\n⏳ Cargando SentenceTransformer...")
 encoder = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
 print("⏳ Vectorizando corpus (puede tardar ~30s)...")
@@ -90,7 +76,6 @@ embeddings_raw = encoder.encode(docs, convert_to_numpy=True, show_progress_bar=T
 embeddings     = normalize(embeddings_raw, norm="l2")
 print(f"   ✅ Embeddings: {embeddings.shape}  (proyectos × dimensiones)")
 
-# ── 4. UMAP (reducción dimensional) ──────────────────────────────
 print(f"\n⏳ Entrenando UMAP {N_COMPONENTS}D (n_neighbors={N_NEIGHBORS})...")
 reducer_nd = umap.UMAP(
     n_components = N_COMPONENTS,
@@ -106,7 +91,6 @@ umap_path = MODELS_DIR / "umap_50d_model.joblib"
 joblib.dump(reducer_nd, umap_path)
 print(f"   💾 Artefacto: {umap_path}  ({umap_path.stat().st_size/1024:.1f} KB)")
 
-# ── 5. HDBSCAN ───────────────────────────────────────────────────
 print("\n⏳ Entrenando HDBSCAN...")
 clusterer = hdbscan.HDBSCAN(
     min_cluster_size       = 3,
@@ -129,7 +113,6 @@ hdbscan_path = MODELS_DIR / "hdbscan_model.joblib"
 joblib.dump(clusterer, hdbscan_path)
 print(f"   💾 Artefacto: {hdbscan_path}  ({hdbscan_path.stat().st_size/1024:.1f} KB)")
 
-# ── 6. MÉTRICAS ──────────────────────────────────────────────────
 print("\n📐 Calculando métricas de calidad del clustering...")
 mask = cluster_labels != -1
 if mask.sum() >= 2 and len(set(cluster_labels[mask])) >= 2:
@@ -146,7 +129,6 @@ for lbl in sorted(set(cluster_labels)):
     name  = "RUIDO / Océano Azul" if lbl == -1 else f"Clúster {lbl:2d}"
     print(f"      {name}: {'█' * count} ({count})")
 
-# ── 7. VISUALIZACIÓN 2D ──────────────────────────────────────────
 print("\n⏳ Generando mapa semántico 2D...")
 reducer_2d = umap.UMAP(
     n_components = 2,
@@ -159,7 +141,6 @@ embeddings_2d = reducer_2d.fit_transform(embeddings)
 
 fig, axes = plt.subplots(1, 2, figsize=(18, 7))
 
-# Plot 1: Coloreado por clúster HDBSCAN
 unique_labels = sorted(set(cluster_labels))
 cmap = plt.colormaps["tab10"].resampled(max(len(unique_labels), 2))
 
@@ -176,7 +157,6 @@ axes[0].legend(loc="best", fontsize=8)
 axes[0].set_xlabel("UMAP Dim 1")
 axes[0].set_ylabel("UMAP Dim 2")
 
-# Plot 2: Coloreado por dominio real
 unique_cats = sorted(set(labels_raw))
 cmap2       = plt.colormaps["tab10"].resampled(len(unique_cats))
 cat2color   = {c: cmap2(i) for i, c in enumerate(unique_cats)}
@@ -196,7 +176,6 @@ plt.savefig(out_map, dpi=150, bbox_inches="tight")
 plt.close()
 print(f"   ✅ Guardada: {out_map}")
 
-# ── 8. RESUMEN FINAL ─────────────────────────────────────────────
 print("\n" + "=" * 60)
 print("  RESUMEN FINAL — CORVUS CLUSTERING")
 print("=" * 60)

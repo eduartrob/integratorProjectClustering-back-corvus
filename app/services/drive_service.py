@@ -12,20 +12,15 @@ logger = logging.getLogger(__name__)
 
 class DriveService:
     def __init__(self):
-        # NOTA: En producción, esto debería inicializarse con las credenciales reales
-        # Por ahora lo dejamos preparado para la inyección de token
         self.scopes = ['https://www.googleapis.com/auth/drive.readonly']
         
     def get_drive_service(self, access_token: str):
-        """Inicializa el cliente de Google Drive usando un token de acceso."""
+        
         creds = Credentials(token=access_token)
         return build('drive', 'v3', credentials=creds)
 
     def download_pdf_to_memory(self, file_id: str, access_token: str) -> io.BytesIO:
-        """
-        Descarga el PDF directamente a la memoria RAM sin tocar el disco duro.
-        ¡Zero-trust y ahorro de almacenamiento!
-        """
+        
         service = self.get_drive_service(access_token)
         request = service.files().get_media(fileId=file_id)
         
@@ -42,15 +37,11 @@ class DriveService:
         return file_stream
 
     def extract_text_from_stream(self, file_stream: io.BytesIO, file_name: str) -> str:
-        """
-        Lee el archivo desde la memoria RAM y extrae todo su texto.
-        Soporta PDFs usando pymupdf4llm (Markdown estructurado) y Text decodificando UTF-8.
-        """
+        
         full_text = ""
         try:
             name_lower = file_name.lower()
             if name_lower.endswith('.pdf'):
-                # Extraer Markdown estructurado en memoria usando PyMuPDF
                 file_bytes = file_stream.read()
                 doc = fitz.open(stream=file_bytes, filetype="pdf")
                 full_text = pymupdf4llm.to_markdown(doc)
@@ -64,23 +55,17 @@ class DriveService:
         return full_text
 
     def process_drive_file(self, file_id: str, file_name: str, access_token: str) -> str:
-        """
-        Orquestador: Descarga el archivo a RAM y devuelve su texto limpio.
-        """
+        
         logger.info(f"Iniciando procesamiento en memoria para el archivo Drive: {file_name}")
         file_stream = self.download_pdf_to_memory(file_id, access_token)
         text = self.extract_text_from_stream(file_stream, file_name)
         return text
 
     def get_files_in_folder(self, folder_id: str, access_token: str) -> list:
-        """
-        Obtiene la lista de archivos (PDF o MD) dentro de una carpeta específica de Drive.
-        Retorna lista de diccionarios: [{"id": "...", "name": "..."}]
-        """
+        
         try:
             print(f"Iniciando búsqueda en Drive para la carpeta: {folder_id}", flush=True)
             service = self.get_drive_service(access_token)
-            # Removemos la restricción estricta de mimeType para poder capturar PDFs, MDs y TXTs.
             query = f"'{folder_id}' in parents and trashed=false"
             
             results = service.files().list(
@@ -89,7 +74,6 @@ class DriveService:
                 pageSize=100
             ).execute()
             
-            # Filtramos localmente para asegurar flexibilidad usando la configuración
             allowed_exts = config_manager.get_allowed_extensions()
             all_files = results.get('files', [])
             files = [f for f in all_files if f.get('name', '').lower().endswith(allowed_exts)]

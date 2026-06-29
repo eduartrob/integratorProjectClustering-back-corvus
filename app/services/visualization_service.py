@@ -10,14 +10,13 @@ import os
 class VisualizationService:
     def __init__(self):
         self.umap_model_path = os.path.join(settings.MODELS_DIR, "umap_50d_model.joblib")
-        # Colores consistentes
         self.cluster_colors = [
             '#4FC3F7', '#FFB74D', '#81C784', '#F06292', '#CE93D8',
             '#80DEEA', '#FFCC02', '#FF8A65', '#A5D6A7', '#90CAF9'
         ]
 
     def _get_data_from_db(self):
-        """Extrae los proyectos y sus embeddings de ChromaDB."""
+        
         results = chroma_service.collection.get(include=["embeddings", "metadatas"])
         if not results or results.get('embeddings') is None or len(results['embeddings']) == 0:
             return None, None, None, None
@@ -42,7 +41,7 @@ class VisualizationService:
         return unique_ids, np.array(aggregated_embeddings), labels, projects_data
 
     def get_cluster_names(self):
-        """Genera nombres para los clusters basados en palabras clave comunes de los IDs."""
+        
         unique_ids, _, labels, _ = self._get_data_from_db()
         if not unique_ids:
             return {}
@@ -71,7 +70,7 @@ class VisualizationService:
         return cluster_names
 
     def get_cluster_stats(self):
-        """Genera estadisticas basicas de los clusters para el panel de admin."""
+        
         unique_ids, _, labels, projects_data = self._get_data_from_db()
         if not unique_ids:
             return {"error": "No hay datos en la base de datos"}
@@ -100,7 +99,7 @@ class VisualizationService:
         }
 
     def get_2d_scatter_data(self):
-        """Genera y devuelve las coordenadas UMAP 2D para la gráfica ScatterChart del frontend."""
+        
         if not os.path.exists(self.umap_model_path):
             return []
 
@@ -112,7 +111,6 @@ class VisualizationService:
             reducer_clustering = joblib.load(self.umap_model_path)
             embeddings_20d = reducer_clustering.transform(embeddings_384d)
             
-            # Proyectar a 2D para ScatterChart Recharts
             reducer_2d = umap.UMAP(n_components=2, n_neighbors=12, min_dist=0.05, metric='euclidean', random_state=42)
             embeddings_2d = reducer_2d.fit_transform(embeddings_20d)
         except Exception:
@@ -130,7 +128,7 @@ class VisualizationService:
         return scatter_data
 
     def generate_3d_html(self):
-        """Genera el HTML de la grafica 3D interactiva."""
+        
         if not os.path.exists(self.umap_model_path):
             return "<html><body><h1>Error</h1><p>Modelo UMAP no encontrado. Ejecuta visualize_clusters.py primero.</p></body></html>"
 
@@ -142,7 +140,6 @@ class VisualizationService:
             reducer_clustering = joblib.load(self.umap_model_path)
             embeddings_20d = reducer_clustering.transform(embeddings_384d)
             
-            # Proyectar a 3D
             reducer_3d = umap.UMAP(n_components=3, n_neighbors=12, min_dist=0.05, metric='euclidean', random_state=42)
             embeddings_3d = reducer_3d.fit_transform(embeddings_20d)
         except Exception as e:
@@ -152,7 +149,6 @@ class VisualizationService:
         unique_labels = sorted(set(labels))
         cluster_labels_valid = [l for l in unique_labels if l != -1]
 
-        # Dibujar clusters normales
         for cluster_id in cluster_labels_valid:
             indices = [i for i, l in enumerate(labels) if l == cluster_id]
             x, y, z = embeddings_3d[indices, 0], embeddings_3d[indices, 1], embeddings_3d[indices, 2]
@@ -172,7 +168,6 @@ class VisualizationService:
                 hovertext=hover_texts, hoverinfo='text',
             ))
 
-        # Dibujar Oceanos Azules
         blue_ocean_indices = [i for i, l in enumerate(labels) if l == -1]
         if blue_ocean_indices:
             x_oa, y_oa, z_oa = embeddings_3d[blue_ocean_indices, 0], embeddings_3d[blue_ocean_indices, 1], embeddings_3d[blue_ocean_indices, 2]

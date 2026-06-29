@@ -5,15 +5,10 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# URL del microservicio LLM (configurada vía variable de entorno)
 LLM_SERVICE_URL = os.getenv("LLM_SERVICE_URL", "http://llm-service:3003")
 
-
 class LlmClient:
-    """
-    Cliente HTTP hacia llm-back-corvus.
-    Reemplaza la llamada directa a Ollama que existía antes.
-    """
+    
 
     def check_health(self) -> bool:
         try:
@@ -26,10 +21,7 @@ class LlmClient:
     def analyze_originality(self, proposal_text: str, similar_projects: list,
                              max_sim_pct: float = 0.0, risk_level: str = "Bajo",
                              project_name: str = "NUEVA_PROPUESTA", top_project_name: str = "Ninguno") -> dict:
-        """
-        Delega el análisis de originalidad al microservicio LLM.
-        Mantiene la misma interfaz que el antiguo ollama_service.py.
-        """
+        
         try:
             logger.info(f"[LlmClient] Enviando propuesta a {LLM_SERVICE_URL}/api/v1/llm/analyze-proposal")
             response = requests.post(
@@ -69,6 +61,5 @@ class LlmClient:
                 "error": str(e),
                 "verdict": "Error de conexión con el servicio de IA",
             }
-
 
 llm_client = LlmClient()

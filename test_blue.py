@@ -10,7 +10,6 @@ def test():
     unique_projects = {}
     if results and results.get('metadatas'):
         for meta in results['metadatas']:
-            # En ChromaDB, si un elemento no tiene metadata, meta puede ser None
             if meta and meta.get('is_blue_ocean'):
                 p_id = meta.get('project_id')
                 if p_id and p_id not in unique_projects:
