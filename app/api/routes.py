@@ -665,7 +665,7 @@ async def _run_analysis_background(user_id: str, draft_path: str):
             top_project_name = similar_projects[0]["title"] if similar_projects else "Ninguno"
             risk_level = "Alto" if max_sim_pct > 50 else ("Medio" if max_sim_pct > 20 else "Bajo")
 
-            if not ollama_service.check_health():
+            if not await ollama_service.check_health():
                 analysis_result_store[user_id] = {
                     "status": "warning",
                     "message": "El motor de IA no está disponible en este momento.",
@@ -677,8 +677,7 @@ async def _run_analysis_background(user_id: str, draft_path: str):
             analysis_progress_store[user_id] = {"phase": 6, "message": "El comité académico está redactando el dictamen..."}
 
             await asyncio.sleep(0)
-            llm_verdict = await asyncio.to_thread(
-                ollama_service.analyze_originality,
+            llm_verdict = await ollama_service.analyze_originality(
                 proposal_text=proposal_text,
                 similar_projects=similar_projects,
                 max_sim_pct=round(max_sim_pct, 1),
@@ -858,8 +857,11 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
 
         proposal_text = " ".join(chunks)
         
-        import asyncio
-        is_healthy = await asyncio.to_thread(ollama_service.check_health)
+        try:
+            is_healthy = await ollama_service.check_health()
+        except Exception:
+            is_healthy = False
+            
         if not is_healthy:
              return {
                  "status": "warning",
