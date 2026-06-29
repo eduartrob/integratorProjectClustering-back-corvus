@@ -459,10 +459,8 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"El documento no parece ser un proyecto integrador. "
-                    f"¿Quizás subiste el archivo equivocado? "
-                    f"No se encontraron las secciones obligatorias: {missing}. "
-                    f"Un proyecto integrador debe incluir al menos: "
+                    f"Faltan secciones obligatorias en tu documento: {missing}. "
+                    f"Asegúrate de incluir explícitamente: "
                     f"'Objetivo General', 'Justificación/Problemática' y 'Alcance'."
                 )
             )
@@ -792,10 +790,8 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"El documento no parece ser un proyecto integrador. "
-                    f"¿Quizás subiste el archivo equivocado? "
-                    f"No se encontraron las secciones obligatorias: {missing}. "
-                    f"Un proyecto integrador debe incluir al menos: "
+                    f"Faltan secciones obligatorias en tu documento: {missing}. "
+                    f"Asegúrate de incluir explícitamente: "
                     f"'Objetivo General', 'Justificación/Problemática' y 'Alcance'."
                 )
             )
