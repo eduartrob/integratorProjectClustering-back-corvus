@@ -27,16 +27,16 @@ analysis_lock = asyncio.Lock()
 
 _MANDATORY_SECTIONS = [
     {
-        "name": "Objetivo General",
-        "keywords": ["objetivo general"],
+        "name": "Metas u Objetivos",
+        "keywords": ["objetivo general", "propósito", "metas", "visión", "misión", "qué buscamos", "solución propuesta", "propuesta de valor"],
     },
     {
         "name": "Justificación o Problemática",
-        "keywords": ["justificación", "justificacion", "problemática", "problematica", "planteamiento del problema"],
+        "keywords": ["justificación", "justificacion", "problemática", "problematica", "planteamiento del problema", "contexto del problema", "necesidad", "situación actual", "por qué"],
     },
     {
-        "name": "Alcance o Funcionalidades",
-        "keywords": ["alcance", "funcionalidades", "lista de funcionalidades", "entregables"],
+        "name": "Alcance o Requerimientos Técnicos",
+        "keywords": ["alcance", "funcionalidades", "lista de funcionalidades", "entregables", "límites", "requerimientos", "requisitos", "casos de uso", "historias de usuario", "arquitectura", "diseño del sistema"],
     },
 ]
 
@@ -453,15 +453,20 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
                 detail="El documento no parece ser una propuesta de proyecto integrador. No se pudo extraer texto (podría ser un documento escaneado o contener muy poco texto)."
             )
 
+        if not nlp_service.is_valid_project(full_text):
+            raise HTTPException(
+                status_code=400,
+                detail="Este documento no parece ser una propuesta de proyecto tecnológico o de software. Por favor, sube el documento correcto."
+            )
+
         section_check = _validate_project_sections(full_text)
         if not section_check["ok"]:
             missing = ", ".join(f"'{s}'" for s in section_check["missing_mandatory"])
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Faltan secciones obligatorias en tu documento: {missing}. "
-                    f"Asegúrate de incluir explícitamente: "
-                    f"'Objetivo General', 'Justificación/Problemática' y 'Alcance'."
+                    f"Tu propuesta es válida, pero olvidaste incluir información sobre: {missing}. "
+                    f"Asegúrate de explicar tus objetivos, el problema que resuelves y los requerimientos técnicos."
                 )
             )
 
@@ -784,15 +789,20 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
         if not full_text:
             raise HTTPException(status_code=400, detail="No se pudo extraer texto del documento.")
 
+        if not nlp_service.is_valid_project(full_text):
+            raise HTTPException(
+                status_code=400,
+                detail="Este documento no parece ser una propuesta de proyecto tecnológico o de software. Por favor, sube el documento correcto."
+            )
+
         section_check = _validate_project_sections(full_text)
         if not section_check["ok"]:
             missing = ", ".join(f"'{s}'" for s in section_check["missing_mandatory"])
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Faltan secciones obligatorias en tu documento: {missing}. "
-                    f"Asegúrate de incluir explícitamente: "
-                    f"'Objetivo General', 'Justificación/Problemática' y 'Alcance'."
+                    f"Tu propuesta es válida, pero olvidaste incluir información sobre: {missing}. "
+                    f"Asegúrate de explicar tus objetivos, el problema que resuelves y los requerimientos técnicos."
                 )
             )
 

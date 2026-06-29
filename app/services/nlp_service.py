@@ -22,23 +22,40 @@ class NLPService:
             self.nlp = None
 
     def is_valid_project(self, text: str) -> bool:
-        
+        if not text:
+            return False
+
         text_lower = text.lower()
-        
         black_list = ["currículum", "curriculum vitae", "experiencia laboral", "autoevaluación", "manual de usuario", "manual de mantenimiento"]
         for word in black_list:
             if word in text_lower[:2000]:
                 logger.warning(f"Documento rechazado por contener palabra bloqueada: {word}")
                 return False
-                
-        white_list = [
-            "resumen", "abstract", "introducción", "conclusión", "objetivo", "metodología", "proyecto", "investigación",
-            "sistema", "plataforma", "aplicación", "software", "desarrollo", "base de datos", "ecommerce", "web", "app"
-        ]
-        match_count = sum(1 for word in white_list if word in text_lower)
+
+        import numpy as np
         
-        if match_count < 1:
-            logger.warning("Documento rechazado por falta de vocabulario académico o técnico.")
+        gold_standard = "Este documento es una propuesta de proyecto tecnológico y de ingeniería de software. Incluye el desarrollo de un sistema o aplicación, el planteamiento de una problemática, el diseño de la arquitectura técnica, los requerimientos, las metas u objetivos, y los usuarios finales o modelo de negocio."
+        
+        # Analizamos las primeras ~1000 palabras para la clasificación
+        text_sample = text[:5000].strip()
+        if not text_sample:
+            return False
+
+        emb_gold = self.encoder.encode(gold_standard)
+        emb_doc = self.encoder.encode(text_sample)
+        
+        norm_gold = np.linalg.norm(emb_gold)
+        norm_doc = np.linalg.norm(emb_doc)
+        
+        if norm_gold == 0 or norm_doc == 0:
+            return False
+            
+        similarity = np.dot(emb_gold, emb_doc) / (norm_gold * norm_doc)
+        
+        logger.info(f"[Semantic Pre-flight] Similitud con Proyecto de Software: {similarity:.3f}")
+        
+        if similarity < 0.25:
+            logger.warning(f"Documento rechazado por baja similitud semántica ({similarity:.3f} < 0.25). No parece ser un proyecto.")
             return False
             
         return True
