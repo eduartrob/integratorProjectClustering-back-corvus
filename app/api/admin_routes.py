@@ -15,6 +15,16 @@ async def get_clusters_3d_html():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/clusters-2d-html", response_class=HTMLResponse, tags=["Admin Panel"])
+async def get_clusters_2d_html():
+    try:
+        html_content = visualization_service.generate_2d_html()
+        if "<h1>Error" in html_content:
+            return HTMLResponse(content=html_content, status_code=500)
+        return HTMLResponse(content=html_content, status_code=200)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/clusters-2d", tags=["Admin Panel"])
 async def get_clusters_2d():
     
