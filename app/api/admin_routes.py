@@ -67,7 +67,6 @@ async def get_projects_count():
 async def get_pending_projects_count():
     
     from app.services.chroma_service import chroma_service
-    import requests
     from app.core.config import settings
     try:
         results = chroma_service.collection.get(include=["metadatas"])
@@ -76,9 +75,18 @@ async def get_pending_projects_count():
         else:
             vectorized_count = len(set(meta['project_id'] for meta in results['metadatas'] if 'project_id' in meta))
 
+        # Pending = projects vectorized but NOT yet clustered (no cluster_id in metadata)
+        pending_count = 0
+        if results and results['metadatas']:
+            seen = set()
+            for meta in results['metadatas']:
+                p_id = meta.get('project_id')
+                if p_id and p_id not in seen:
+                    seen.add(p_id)
+                    if 'cluster_id' not in meta:  # not yet clustered
+                        pending_count += 1
+
         total_detected = vectorized_count
-        pending_count = total_detected - vectorized_count
-        
         pct = 0.0
         if total_detected > 0:
             pct = round((pending_count / total_detected) * 100, 1)
@@ -88,6 +96,29 @@ async def get_pending_projects_count():
             "total_detected": total_detected,
             "vectorized_count": vectorized_count,
             "pending_percentage": pct
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/reset-data", tags=["Admin Panel"])
+async def reset_all_data():
+    """Borra TODOS los vectores de ChromaDB para empezar desde cero.
+    Úsalo antes de volver a sincronizar la carpeta de Drive."""
+    from app.services.chroma_service import chroma_service
+    import chromadb
+    try:
+        client = chroma_service.client
+        collection_name = "integrator_projects"
+        # Delete and recreate the collection
+        client.delete_collection(name=collection_name)
+        chroma_service.collection = client.get_or_create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"}
+        )
+        return {
+            "status": "ok",
+            "message": "✅ ChromaDB limpiado exitosamente. Ahora sincroniza la carpeta de Drive para cargar los nuevos proyectos."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
