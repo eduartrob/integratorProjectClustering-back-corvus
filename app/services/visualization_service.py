@@ -202,89 +202,107 @@ class VisualizationService:
 
     def generate_2d_html(self):
         if not os.path.exists(self.umap_model_path):
-            return "<html><body><h1>Error</h1><p>Modelo UMAP no encontrado. Ejecuta visualize_clusters.py primero.</p></body></html>"
+            return "<html><body><h1>Error</h1><p>Modelo UMAP no encontrado.</p></body></html>"
 
         unique_ids, embeddings_384d, labels, _ = self._get_data_from_db()
         if not unique_ids:
-            return "<html><body><h1>Error</h1><p>No hay datos suficientes en ChromaDB.</p></body></html>"
+            return "<html><body><h1>Error</h1><p>No hay datos en ChromaDB.</p></body></html>"
 
         try:
             reducer_clustering = joblib.load(self.umap_model_path)
             embeddings_20d = reducer_clustering.transform(embeddings_384d)
-            
             reducer_2d = umap.UMAP(n_components=2, n_neighbors=12, min_dist=0.05, metric='euclidean', random_state=42)
             embeddings_2d = reducer_2d.fit_transform(embeddings_20d)
         except Exception as e:
             return f"<html><body><h1>Error de proyeccion</h1><p>{str(e)}</p></body></html>"
 
+        import math
+
+        def hex_to_rgba(hex_color, alpha):
+            h = hex_color.lstrip('#')
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+            return f'rgba({r},{g},{b},{alpha})'
+
+        def ellipse_points(cx, cy, sx, sy, n=60):
+            return (
+                [cx + sx * math.cos(2 * math.pi * i / n) for i in range(n + 1)],
+                [cy + sy * math.sin(2 * math.pi * i / n) for i in range(n + 1)]
+            )
+
         fig = go.Figure()
         unique_labels = sorted(set(labels))
         cluster_labels_valid = [l for l in unique_labels if l != -1]
 
-        # Draw contours first so they are behind points
+        # Outer + inner ellipses per cluster (KDE-style)
         for cluster_id in cluster_labels_valid:
             indices = [i for i, l in enumerate(labels) if l == cluster_id]
             if len(indices) < 3:
                 continue
-            x, y = embeddings_2d[indices, 0], embeddings_2d[indices, 1]
+            pts = embeddings_2d[indices]
             color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
-            
-            fig.add_trace(go.Histogram2dContour(
-                x=x, y=y,
-                colorscale=[[0, 'rgba(0,0,0,0)'], [1, color]],
-                showscale=False,
-                ncontours=5,
-                line=dict(width=0),
-                contours=dict(coloring='fill'),
-                opacity=0.3,
-                hoverinfo='skip'
-            ))
+            cx, cy = float(pts[:, 0].mean()), float(pts[:, 1].mean())
+            sx = float(pts[:, 0].std()) * 2.4
+            sy = float(pts[:, 1].std()) * 2.4
+            # Outer halo
+            ex, ey = ellipse_points(cx, cy, sx, sy)
+            fig.add_trace(go.Scatter(x=ex, y=ey, fill='toself',
+                fillcolor=hex_to_rgba(color, 0.13),
+                line=dict(color='rgba(0,0,0,0)', width=0),
+                showlegend=False, hoverinfo='skip', mode='lines'))
+            # Inner core
+            ex2, ey2 = ellipse_points(cx, cy, sx * 0.52, sy * 0.52)
+            fig.add_trace(go.Scatter(x=ex2, y=ey2, fill='toself',
+                fillcolor=hex_to_rgba(color, 0.30),
+                line=dict(color=hex_to_rgba(color, 0.55), width=1.2),
+                showlegend=False, hoverinfo='skip', mode='lines'))
 
-        # Draw points
+        # Cluster points
         for cluster_id in cluster_labels_valid:
             indices = [i for i, l in enumerate(labels) if l == cluster_id]
             x, y = embeddings_2d[indices, 0], embeddings_2d[indices, 1]
             color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
-            
             hover_texts = [
-                f"<b>{unique_ids[i].replace('_', ' ').title()}</b><br>Cluster: {cluster_id}"
+                f"<b>{unique_ids[i].replace('_', ' ').title()}</b><br>Clúster: {cluster_id}"
                 for i in indices
             ]
-            
-            fig.add_trace(go.Scatter(
-                x=x, y=y, mode='markers',
+            fig.add_trace(go.Scatter(x=x, y=y, mode='markers',
                 name=f'Clúster {cluster_id} ({len(indices)} proy.)',
-                marker=dict(size=12, color=color, opacity=0.9, line=dict(color='white', width=1)),
-                hovertext=hover_texts, hoverinfo='text'
-            ))
+                marker=dict(size=12, color=color, opacity=0.92,
+                            line=dict(color='white', width=1.2)),
+                hovertext=hover_texts, hoverinfo='text'))
 
-        # Draw blue oceans as stars
+        # Blue Oceans as red stars
         blue_ocean_indices = [i for i, l in enumerate(labels) if l == -1]
         if blue_ocean_indices:
-            x_oa, y_oa = embeddings_2d[blue_ocean_indices, 0], embeddings_2d[blue_ocean_indices, 1]
-            hover_oa = [f"<b>🌊 OCEANO AZUL</b><br><b>{unique_ids[i].replace('_', ' ').title()}</b>" for i in blue_ocean_indices]
-            
-            fig.add_trace(go.Scatter(
-                x=x_oa, y=y_oa, mode='markers',
-                name=f'Océanos Azules ({len(blue_ocean_indices)} proy.)',
-                marker=dict(size=18, color='#FF4444', symbol='star', line=dict(color='white', width=1.5)),
-                hovertext=hover_oa, hoverinfo='text'
-            ))
+            x_oa = embeddings_2d[blue_ocean_indices, 0]
+            y_oa = embeddings_2d[blue_ocean_indices, 1]
+            hover_oa = [
+                f"<b>🌊 OCÉANO AZUL</b><br><b>{unique_ids[i].replace('_', ' ').title()}</b>"
+                for i in blue_ocean_indices
+            ]
+            fig.add_trace(go.Scatter(x=x_oa, y=y_oa, mode='markers',
+                name=f'🌊 Océano Azul ({len(blue_ocean_indices)} proy.)',
+                marker=dict(size=20, color='#FF3333', symbol='star',
+                            line=dict(color='darkred', width=1.5), opacity=1.0),
+                hovertext=hover_oa, hoverinfo='text'))
 
         fig.update_layout(
-            title=dict(
-                text="<b>Mapa Semántico 2D — Clústeres HDBSCAN</b>",
-                x=0.5, font=dict(size=16, color='black')
-            ),
-            xaxis=dict(title='UMAP Dim 1', gridcolor='#e2e8f0', zerolinecolor='#e2e8f0', tickfont=dict(color='#333333')),
-            yaxis=dict(title='UMAP Dim 2', gridcolor='#e2e8f0', zerolinecolor='#e2e8f0', tickfont=dict(color='#333333')),
-            paper_bgcolor='white', plot_bgcolor='white',
-            legend=dict(font=dict(color='black', size=11), bordercolor='#e2e8f0', borderwidth=1),
+            title=dict(text="<b>Mapa Semántico 2D — Clústeres HDBSCAN</b>",
+                       x=0.5, font=dict(size=16, color='#1a1a2e')),
+            xaxis=dict(title='UMAP Dim 1', gridcolor='#e8edf5', zerolinecolor='#d0d7e3',
+                       tickfont=dict(color='#444')),
+            yaxis=dict(title='UMAP Dim 2', gridcolor='#e8edf5', zerolinecolor='#d0d7e3',
+                       tickfont=dict(color='#444')),
+            paper_bgcolor='white', plot_bgcolor='#fafbff',
+            legend=dict(font=dict(color='#222', size=11), bordercolor='#dde3ef',
+                        borderwidth=1, bgcolor='white'),
             margin=dict(l=40, r=20, t=60, b=40),
             hoverlabel=dict(bgcolor='white', font=dict(color='black', size=13))
         )
 
         return fig.to_html(include_plotlyjs='cdn', full_html=True)
+
+
 
 
 visualization_service = VisualizationService()
