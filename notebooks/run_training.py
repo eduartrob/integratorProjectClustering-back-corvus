@@ -69,11 +69,23 @@ plt.savefig(out_dist, dpi=120, bbox_inches="tight")
 plt.close()
 print(f"   ✅ Guardada: {out_dist}")
 
-print("\n⏳ Cargando SentenceTransformer...")
-encoder = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-print("⏳ Vectorizando corpus (puede tardar ~30s)...")
-embeddings_raw = encoder.encode(docs, convert_to_numpy=True, show_progress_bar=True)
-embeddings     = normalize(embeddings_raw, norm="l2")
+print("\n⏳ Importando NLP Service y vectorizando por fragmentos...")
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from app.services.nlp_service import nlp_service
+
+embeddings_list = []
+for text in docs:
+    clean_text = nlp_service.strip_structure(text)
+    safe_text = nlp_service.anonymize_pii(clean_text)
+    chunks = nlp_service.chunk_text(safe_text)
+    chunk_embs = nlp_service.vectorize(chunks)
+    if chunk_embs:
+        avg_emb = np.mean(chunk_embs, axis=0)
+    else:
+        avg_emb = np.zeros(384)
+    embeddings_list.append(avg_emb)
+
+embeddings = np.array(embeddings_list)
 print(f"   ✅ Embeddings: {embeddings.shape}  (proyectos × dimensiones)")
 
 print(f"\n⏳ Entrenando UMAP {N_COMPONENTS}D (n_neighbors={N_NEIGHBORS})...")

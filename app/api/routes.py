@@ -31,7 +31,7 @@ _MANDATORY_SECTIONS = [
         "name": "Metas u Objetivos",
         "keywords": ["objetivo", "objetivos", "propósito", "metas", "visión", "misión", "qué buscamos", "solución propuesta", "propuesta de valor", "optimización"],
     },
-    {
+    {+
         "name": "Justificación o Problemática",
         "keywords": ["justificación", "justificacion", "problemática", "problematica", "planteamiento del problema", "contexto", "necesidad", "situación actual", "por qué", "descripción del proyecto", "descripcion"],
     },

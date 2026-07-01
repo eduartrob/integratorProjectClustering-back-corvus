@@ -93,7 +93,7 @@ class ClusteringEngineService:
                 min_cluster_size=3,
                 min_samples=2,
                 metric='euclidean',
-                cluster_selection_epsilon=0.5,
+                cluster_selection_method='eom',
                 prediction_data=True
             )
             labels = clusterer.fit_predict(embeddings_50d)
