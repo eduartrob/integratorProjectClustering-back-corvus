@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     AUTH_SERVICE_URL: str = "http://localhost:3001"
     LLM_SERVICE_URL: str = "http://localhost:3003"
     
+    RABBITMQ_HOST: str = "rabbitmq"
+    RABBITMQ_USER: str = "corvus_admin"
+    RABBITMQ_PASS: str = "corvus_secret"
+    
     MODELS_DIR: str = "./app/models"
 
     class Config:

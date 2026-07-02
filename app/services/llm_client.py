@@ -2,17 +2,18 @@ import os
 import json
 import logging
 import httpx
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-LLM_SERVICE_URL = os.getenv("LLM_SERVICE_URL", "http://llm-service:3003")
+
 
 class LlmClient:
     
     async def check_health(self) -> bool:
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(f"{LLM_SERVICE_URL}/api/v1/llm/health", timeout=5.0)
+                response = await client.get(f"{settings.LLM_SERVICE_URL}/api/v1/llm/health", timeout=5.0)
                 data = response.json()
                 return response.status_code == 200 and data.get("ollama") == "connected"
         except Exception:
@@ -26,11 +27,11 @@ class LlmClient:
             current_config = config_manager.get_config()
             llm_provider = current_config.get("llm_provider", "ollama")
 
-            logger.info(f"[LlmClient] Enviando propuesta a {LLM_SERVICE_URL}/api/v1/llm/analyze-proposal (Provider: {llm_provider})")
+            logger.info(f"[LlmClient] Enviando propuesta a {settings.LLM_SERVICE_URL}/api/v1/llm/analyze-proposal (Provider: {llm_provider})")
             
             async with httpx.AsyncClient(timeout=None) as client:
                 response = await client.post(
-                    f"{LLM_SERVICE_URL}/api/v1/llm/analyze-proposal",
+                    f"{settings.LLM_SERVICE_URL}/api/v1/llm/analyze-proposal",
                     json={
                         "proposal_text": proposal_text,
                         "similar_projects": similar_projects,

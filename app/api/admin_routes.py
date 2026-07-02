@@ -65,28 +65,16 @@ async def get_projects_count():
 
 @router.get("/pending-projects-count", tags=["Admin Panel"])
 async def get_pending_projects_count():
-    
     from app.services.chroma_service import chroma_service
-    from app.core.config import settings
+    from app.services.pending_projects_db import pending_projects_db
     try:
         results = chroma_service.collection.get(include=["metadatas"])
-        if not results or not results['metadatas']:
-            vectorized_count = 0
-        else:
+        vectorized_count = 0
+        if results and results['metadatas']:
             vectorized_count = len(set(meta['project_id'] for meta in results['metadatas'] if 'project_id' in meta))
 
-        # Pending = projects vectorized but NOT yet clustered (no cluster_id in metadata)
-        pending_count = 0
-        if results and results['metadatas']:
-            seen = set()
-            for meta in results['metadatas']:
-                p_id = meta.get('project_id')
-                if p_id and p_id not in seen:
-                    seen.add(p_id)
-                    if 'cluster_id' not in meta:  # not yet clustered
-                        pending_count += 1
-
-        total_detected = vectorized_count
+        pending_count = pending_projects_db.get_pending_count()
+        total_detected = vectorized_count + pending_count
         pct = 0.0
         if total_detected > 0:
             pct = round((pending_count / total_detected) * 100, 1)
@@ -125,11 +113,39 @@ async def reset_all_data():
 
 @router.post("/execute", tags=["Admin Panel"])
 async def execute_clustering(background_tasks: BackgroundTasks):
-    
     from app.services.clustering_service import clustering_engine
-    
+    from app.services.pending_projects_db import pending_projects_db
+    from app.services.chroma_service import chroma_service
+    from app.services.nlp_service import nlp_service
+
     def run_clustering():
         try:
+            pending = pending_projects_db.get_all_pending()
+            print(f"Vectorizando {len(pending)} proyectos pendientes antes de clusterizar...", flush=True)
+            for p in pending:
+                try:
+                    raw_text = pending_projects_db.read_project_text(p["text_file"])
+                    if raw_text:
+                        clean_text = nlp_service.strip_structure(raw_text)
+                        safe_text = nlp_service.anonymize_pii(clean_text)
+                        chunks = nlp_service.chunk_text(safe_text)
+                        embeddings = nlp_service.vectorize(chunks)
+                        if embeddings:
+                            chroma_service.add_vectors(
+                                project_id=p["id"],
+                                texts=chunks,
+                                embeddings=embeddings,
+                                url_drive=p["source_url"]
+                            )
+                    # Quitar de pendientes y borrar el txt temporal
+                    pending_projects_db.pop_pending_project(p["id"])
+                    import os
+                    if os.path.exists(p["text_file"]):
+                        os.remove(p["text_file"])
+                except Exception as ex:
+                    print(f"Error vectorizando pendiente {p['id']}: {ex}")
+            
+            print("Ejecutando clustering global...", flush=True)
             success = clustering_engine.execute_global_clustering()
             if success:
                 print("Clustering global ejecutado exitosamente.")
@@ -141,7 +157,7 @@ async def execute_clustering(background_tasks: BackgroundTasks):
             print(f"Error ejecutando clustering: {e}")
 
     background_tasks.add_task(run_clustering)
-    return {"message": "Clustering global iniciado en segundo plano. Esto puede tomar unos minutos."}
+    return {"message": "Iniciando vectorización y clustering global en segundo plano. Esto puede tomar unos minutos."}
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from app.core.config_manager import config_manager
@@ -173,7 +189,23 @@ async def get_recent_projects(limit: int = 50):
     
     from app.services.visualization_service import visualization_service
     from app.services.chroma_service import chroma_service
+    from app.services.pending_projects_db import pending_projects_db
     try:
+        projects_list = []
+        
+        # 1. Agregar pendientes primero
+        pending = pending_projects_db.get_all_pending()
+        for p in pending:
+            projects_list.append({
+                "id": p["id"],
+                "name": p["name"],
+                "major": "Ingeniería" if "ing" in p["name"].lower() else "Multidisciplinario",
+                "date": "Pendiente",
+                "status": "Pendiente (No Vectorizado)",
+                "statusClass": "bg-outline-variant/30 text-on-surface-variant"
+            })
+            
+        # 2. Agregar clusterizados/vectorizados
         results = chroma_service.collection.get(include=["metadatas"])
         cluster_names = visualization_service.get_cluster_names()
         
@@ -196,8 +228,8 @@ async def get_recent_projects(limit: int = 50):
                         status = f"Tema: {c_name}"
                         status_class = "bg-primary-container/20 text-primary"
                     else:
-                        status = "Pendiente"
-                        status_class = "bg-outline-variant/30 text-on-surface-variant"
+                        status = "Vectorizado"
+                        status_class = "bg-surface-variant text-on-surface-variant"
                         
                     unique_projects[p_id] = {
                         "id": p_id,
@@ -208,8 +240,9 @@ async def get_recent_projects(limit: int = 50):
                         "statusClass": status_class
                     }
                     
-        projects_list = list(unique_projects.values())
-        projects_list.reverse()
+        vectorized_list = list(unique_projects.values())
+        vectorized_list.reverse()
+        projects_list.extend(vectorized_list)
         return projects_list[:limit]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

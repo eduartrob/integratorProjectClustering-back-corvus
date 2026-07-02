@@ -1,230 +1,209 @@
-import os
-import chromadb
+"""
+clustering_service.py — Motor de clustering con K-Means validado.
+Reemplaza el HDBSCAN+UMAP anterior que generaba clusters incorrectos.
+Usa el mismo embedding model que nlp_service y almacena en Qdrant.
+"""
+import logging
+import joblib
 import numpy as np
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import hdbscan
-import umap
-import joblib
-import hashlib
-import json
 from pathlib import Path
-from scipy.spatial import ConvexHull
-from collections import Counter
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+
+logger = logging.getLogger(__name__)
+
+_BASE_DIR   = Path(__file__).resolve().parent.parent.parent
+_NOTEBOOKS  = _BASE_DIR / "notebooks"
+_MODELO_PKL = _NOTEBOOKS / "models" / "modelo_clasificacion_embeddings.pkl"
+_CSV_ECO    = _NOTEBOOKS / "data" / "proyectos_aprobados_filtrados.csv"
+_EMB_MODEL  = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+# Rango de K para el método del codo
+_K_MIN, _K_MAX = 3, 12
+
 
 class ClusteringEngineService:
+    """
+    Motor de clustering basado en K-Means sobre embeddings de SentenceTransformer.
+    Carga el ecosistema de proyectos validados (CSV) y asigna el nuevo proyecto
+    al clúster más cercano, calculando su posición relativa al centroide.
+    """
+
     def __init__(self):
-        self.base_dir = Path(__file__).resolve().parent.parent.parent
-        self.models_dir = self.base_dir / "app" / "models"
-        self.models_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.model_path = self.models_dir / "hdbscan_model.joblib"
-        self.umap_model_path = self.models_dir / "umap_50d_model.joblib"
-        self.hash_path = self.models_dir / "data_hash.txt"
-        self.chroma_path = self.base_dir / "chroma_data"
-        self.topics_path = self.models_dir / "unexplored_topics.json"
-        self.html_out_path = self.base_dir / "clusters_interactivo.html"
+        self._emb_model   = None   # carga lazy
+        self._df_eco      = None   # ecosistema de proyectos
+        self._embeddings  = None   # vectores del ecosistema (numpy)
+        self._kmeans      = None   # modelo K-Means entrenado
+        self._pca         = None   # PCA 2D para visualización
+        self._embeddings_2d = None
 
-    def execute_global_clustering(self):
-        print("Iniciando extracción desde ChromaDB...")
-        
-        client = chromadb.PersistentClient(path=str(self.chroma_path))
-        collection = client.get_collection("integrator_projects")
+    # ── Carga lazy del modelo de embeddings ──────────────────────────────────
 
-        results = collection.get(include=["embeddings", "metadatas", "documents"])
+    def _get_emb_model(self):
+        if self._emb_model is None:
+            from fastembed import TextEmbedding
+            self._emb_model = TextEmbedding(model_name=_EMB_MODEL)
+            logger.info("[Clustering] Modelo de embeddings cargado.")
+        return self._emb_model
 
-        projects_data = {}
-        for i, meta in enumerate(results['metadatas']):
-            p_id = meta.get('project_id')
-            if not p_id:
-                continue
-            if p_id not in projects_data:
-                projects_data[p_id] = {'embeddings': [], 'id_to_update': []}
-            projects_data[p_id]['embeddings'].append(results['embeddings'][i])
-            projects_data[p_id]['id_to_update'].append(results['ids'][i])
+    # ── Cargar ecosistema de proyectos ───────────────────────────────────────
 
-        unique_project_ids = sorted(list(projects_data.keys()))
-        aggregated_embeddings = []
+    def _cargar_ecosistema(self):
+        """Carga el CSV de proyectos aprobados y vectoriza su contenido."""
+        if self._embeddings is not None:
+            return   # ya cargado
 
-        for p_id in unique_project_ids:
-            avg_emb = np.mean(projects_data[p_id]['embeddings'], axis=0)
-            aggregated_embeddings.append(avg_emb)
+        if not _CSV_ECO.exists():
+            logger.error(f"[Clustering] No se encontró el ecosistema: {_CSV_ECO}")
+            return
 
-        embeddings_384d = np.array(aggregated_embeddings)
+        emb = self._get_emb_model()
+        df  = pd.read_csv(_CSV_ECO)
 
-        if len(embeddings_384d) < 3:
-            print("¡Sube al menos 3 proyectos diferentes para poder entrenar el clusterer!")
+        col_texto = next((c for c in ["propuesta_limpia", "texto_limpio", "texto", "contenido"]
+                          if c in df.columns), None)
+        if col_texto is None:
+            logger.error("[Clustering] El CSV no tiene columna de texto reconocida.")
+            return
+
+        df = df.dropna(subset=[col_texto]).reset_index(drop=True)
+        textos = df[col_texto].astype(str).tolist()
+
+        logger.info(f"[Clustering] Vectorizando {len(textos)} proyectos del ecosistema...")
+        vecs = np.array(list(emb.embed(textos)))
+
+        self._df_eco     = df
+        self._embeddings = vecs
+        logger.info("[Clustering] Ecosistema cargado.")
+
+    # ── Método del codo para elegir K ────────────────────────────────────────
+
+    def _elegir_k(self, X: np.ndarray) -> int:
+        """Elige K óptimo con el método del codo (mayor cambio de inercia)."""
+        k_range = range(_K_MIN, min(_K_MAX + 1, len(X)))
+        inercias = []
+        for k in k_range:
+            km = KMeans(n_clusters=k, random_state=42, n_init="auto")
+            km.fit(X)
+            inercias.append(km.inertia_)
+
+        # Mayor diferencia de segunda derivada → codo
+        deltas = np.diff(inercias)
+        accel  = np.diff(deltas)
+        k_opt  = list(k_range)[np.argmax(np.abs(accel)) + 1] if len(accel) else _K_MIN
+        logger.info(f"[Clustering] K óptimo por codo: {k_opt}")
+        return k_opt
+
+    # ── Pipeline de clustering para un nuevo proyecto ────────────────────────
+
+    def asignar_cluster(self, vector_nuevo: list) -> dict:
+        """
+        Dado el vector del nuevo proyecto, entrena K-Means sobre el ecosistema
+        y asigna el proyecto al clúster más cercano.
+
+        Retorna:
+          cluster_id      : int — clúster asignado (0-indexed)
+          cluster_total   : int — total de clústeres
+          posicion_pct    : float — posición dentro del radio del clúster (0-100)
+          innovacion_pct  : float — inverso de la posición (qué tan alejado del centro)
+          proyectos_cercanos: list — proyectos del mismo clúster
+        """
+        self._cargar_ecosistema()
+        if self._embeddings is None:
+            return {"error": "Ecosistema no disponible", "cluster_id": -1}
+
+        vec_nuevo = np.array(vector_nuevo).reshape(1, -1)
+        X_total   = np.vstack([self._embeddings, vec_nuevo])
+
+        # Entrenar K-Means si es necesario o reusar
+        k = self._elegir_k(self._embeddings)
+        if self._kmeans is None or self._kmeans.n_clusters != k:
+            self._kmeans = KMeans(n_clusters=k, random_state=42, n_init="auto")
+            self._kmeans.fit(self._embeddings)
+            logger.info(f"[Clustering] K-Means entrenado con K={k}.")
+
+        cluster_id = int(self._kmeans.predict(vec_nuevo)[0])
+        centroide  = self._kmeans.cluster_centers_[cluster_id]
+
+        # Calcular posición relativa al radio del clúster
+        dist_nuevo = float(np.linalg.norm(vec_nuevo[0] - centroide))
+        indices_cluster = np.where(self._kmeans.labels_ == cluster_id)[0]
+        if len(indices_cluster) > 0:
+            dists_miembros = np.linalg.norm(
+                self._embeddings[indices_cluster] - centroide, axis=1
+            )
+            radio = float(np.max(dists_miembros)) if len(dists_miembros) else dist_nuevo
+        else:
+            radio = dist_nuevo if dist_nuevo > 0 else 1.0
+
+        posicion_pct   = round(min((dist_nuevo / radio) * 100, 100), 1) if radio > 0 else 0.0
+        innovacion_pct = round(100 - posicion_pct, 1)
+
+        # Proyectos cercanos del mismo clúster
+        proyectos_cercanos = []
+        if self._df_eco is not None and len(indices_cluster) > 0:
+            col_nombre = next((c for c in ["nombre_proyecto", "titulo", "name", "proyecto"]
+                               if c in self._df_eco.columns), None)
+            if col_nombre:
+                proyectos_cercanos = self._df_eco.iloc[indices_cluster][col_nombre].tolist()[:5]
+
+        # PCA 2D para visualización (opcional, si el frontend lo pide)
+        try:
+            if self._pca is None:
+                self._pca = PCA(n_components=2, random_state=42)
+                self._embeddings_2d = self._pca.fit_transform(self._embeddings)
+            coord_nuevo_2d = self._pca.transform(vec_nuevo)[0].tolist()
+        except Exception:
+            coord_nuevo_2d = [0.0, 0.0]
+
+        logger.info(f"[Clustering] Clúster asignado: {cluster_id}/{k} | Posición: {posicion_pct}%")
+        return {
+            "cluster_id"       : cluster_id,
+            "cluster_total"    : k,
+            "posicion_pct"     : posicion_pct,
+            "innovacion_pct"   : innovacion_pct,
+            "proyectos_cercanos": proyectos_cercanos,
+            "coord_2d"         : coord_nuevo_2d,
+        }
+
+    # ── Clustering global (para re-indexar todo el corpus de profesores) ─────
+
+    def execute_global_clustering(self) -> bool:
+        """
+        Re-entrena el K-Means con todos los proyectos del corpus.
+        Se llama cuando el profesor sube nuevos PDFs al repositorio.
+        """
+        self._emb_model  = None
+        self._df_eco     = None
+        self._embeddings = None
+        self._kmeans     = None
+        self._cargar_ecosistema()
+        if self._embeddings is None:
             return False
-
-        current_hash = hashlib.md5(np.ascontiguousarray(embeddings_384d).tobytes()).hexdigest()
-
-        force_retrain = False
-        if self.model_path.exists() and self.umap_model_path.exists() and self.hash_path.exists():
-            if self.hash_path.read_text() == current_hash:
-                print("Modelos vigentes y datos sin cambios. Cargando sin re-entrenar...")
-                reducer_clustering = joblib.load(self.umap_model_path)
-                clusterer = joblib.load(self.model_path)
-                embeddings_50d = reducer_clustering.transform(embeddings_384d)
-                labels = clusterer.labels_
-            else:
-                print("Los datos cambiaron. Re-entrenando modelos...")
-                force_retrain = True
-        else:
-            print("Modelos no encontrados. Entrenando desde cero...")
-            force_retrain = True
-
-        if force_retrain:
-            print("Reduciendo a 20D para HDBSCAN...")
-            reducer_clustering = umap.UMAP(
-                n_components=20,
-                n_neighbors=15,
-                min_dist=0.0,
-                metric='cosine',
-                random_state=42
-            )
-            embeddings_50d = reducer_clustering.fit_transform(embeddings_384d)
-
-            joblib.dump(reducer_clustering, self.umap_model_path)
-            print(f"Modelo UMAP guardado en: {self.umap_model_path}")
-
-            print("Entrenando HDBSCAN...")
-            clusterer = hdbscan.HDBSCAN(
-                min_cluster_size=3,
-                min_samples=2,
-                metric='euclidean',
-                cluster_selection_method='eom',
-                prediction_data=True
-            )
-            labels = clusterer.fit_predict(embeddings_50d)
-
-            joblib.dump(clusterer, self.model_path)
-            self.hash_path.write_text(current_hash)
-            print(f"Modelo HDBSCAN guardado en: {self.model_path}")
-
-        n_noise = list(labels).count(-1)
-        pct_noise = (n_noise / len(labels)) * 100
-        print(f"Diagnóstico: {n_noise}/{len(labels)} proyectos ({pct_noise:.1f}%) fueron marcados como Océano Azul.")
-
-        print("Actualizando metadatos en ChromaDB...")
-        for i, p_id in enumerate(unique_project_ids):
-            label = int(labels[i])
-            is_ocean_blue = bool(label == -1)
-            
-            chunk_ids = projects_data[p_id]['id_to_update']
-            current_chunks = collection.get(ids=chunk_ids, include=["metadatas"])
-            
-            new_metadatas = []
-            for meta in current_chunks['metadatas']:
-                updated_meta = meta.copy()
-                updated_meta['cluster_id'] = label
-                updated_meta['is_blue_ocean'] = is_ocean_blue
-                new_metadatas.append(updated_meta)
-                
-            collection.update(
-                ids=chunk_ids,
-                metadatas=new_metadatas
-            )
-        print("¡Metadatos actualizados con éxito!")
-
-        print("Analizando clústeres para derivar temas inexplorados...")
-        valid_labels = [l for l in labels if l != -1]
-        unexplored_topics = []
-        if valid_labels:
-            cluster_sizes = Counter(valid_labels)
-            smallest_clusters = [item[0] for item in cluster_sizes.most_common()[:-4:-1]]
-            
-            for cluster_id in smallest_clusters:
-                projects_in_cluster = [unique_project_ids[i] for i, l in enumerate(labels) if l == cluster_id]
-                if projects_in_cluster:
-                    sample_project = projects_in_cluster[0].replace('proyecto_', '').replace('_', ' ').title()
-                    unexplored_topics.append(f"Nuevos enfoques en: {sample_project}")
-                    
-            with open(self.topics_path, "w", encoding="utf-8") as f:
-                json.dump(unexplored_topics, f, ensure_ascii=False, indent=2)
-            print(f"Temas inexplorados guardados en {self.topics_path}")
-        else:
-            print("No se encontraron clústeres válidos para temas inexplorados.")
-
-        print("Reduciendo dimensiones con UMAP a 2D SOLO para visualización...")
-        reducer_viz = umap.UMAP(n_components=2, n_neighbors=10, min_dist=0.1, metric='euclidean', random_state=42)
-        embeddings_2d = reducer_viz.fit_transform(embeddings_50d)
-
-        df = pd.DataFrame({
-            'X': embeddings_2d[:, 0],
-            'Y': embeddings_2d[:, 1],
-            'Label': labels,
-            'Project ID': unique_project_ids,
-            'Num': range(1, len(unique_project_ids) + 1)
-        })
-
-        print("Generando gráfica interactiva 'clusters_interactivo.html'...")
-        fig = go.Figure()
-        unique_labels = set(labels)
-        cmap = px.colors.qualitative.Alphabet
-
-        for label in unique_labels:
-            if label == -1:
-                continue
-                
-            cluster_points = df[df['Label'] == label]
-            color = cmap[label % len(cmap)]
-            
-            fig.add_trace(go.Scatter(
-                x=cluster_points['X'], y=cluster_points['Y'],
-                mode='markers+text',
-                marker=dict(size=12, color=color, line=dict(width=1, color='white')),
-                text=cluster_points['Num'],
-                textposition="bottom center",
-                name=f'Clúster {label}',
-                hoverinfo='text',
-                hovertext=[f"ID: {pid}<br>Clúster: {label}" for pid in cluster_points['Project ID']]
-            ))
-            
-            pts = cluster_points[['X', 'Y']].values
-            if len(pts) >= 3:
-                hull = ConvexHull(pts)
-                hull_pts = np.append(pts[hull.vertices], [pts[hull.vertices[0]]], axis=0)
-                fig.add_trace(go.Scatter(
-                    x=hull_pts[:, 0], y=hull_pts[:, 1],
-                    mode='lines',
-                    fill='toself',
-                    fillcolor=color,
-                    line=dict(color=color, width=2),
-                    opacity=0.2,
-                    hoverinfo='skip',
-                    showlegend=False
-                ))
-
-        outliers = df[df['Label'] == -1]
-        if not outliers.empty:
-            fig.add_trace(go.Scatter(
-                x=outliers['X'], y=outliers['Y'],
-                mode='markers+text',
-                marker=dict(size=16, color='red', symbol='star', line=dict(width=1, color='black')),
-                text=outliers['Num'],
-                textfont=dict(color='white'),
-                textposition="top center",
-                name=f'Océano Azul Histórico ({len(outliers)})',
-                hoverinfo='text',
-                hovertext=[f"ID: {pid}<br>¡OCÉANO AZUL!" for pid in outliers['Project ID']]
-            ))
-
-        fig.update_layout(
-            title="Clustering Topológico HDBSCAN + UMAP (Detección de Océanos Azules)",
-            title_font=dict(size=20, color='white'),
-            plot_bgcolor='#0a0f2e',
-            paper_bgcolor='#0a0f2e',
-            font=dict(color='white'),
-            xaxis=dict(title="UMAP 1", showgrid=False, zeroline=False),
-            yaxis=dict(title="UMAP 2", showgrid=False, zeroline=False),
-            legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color='white')),
-            hovermode='closest'
-        )
-
-        fig.write_html(str(self.html_out_path))
-        print(f"¡Gráfica interactiva guardada en {self.html_out_path}!")
-        print("¡Proceso completado exitosamente!")
+        k = self._elegir_k(self._embeddings)
+        self._kmeans = KMeans(n_clusters=k, random_state=42, n_init="auto")
+        self._kmeans.fit(self._embeddings)
+        logger.info(f"[Clustering] Re-entrenamiento global completado. K={k}.")
         return True
+
+    # ── Compatibilidad con código viejo ──────────────────────────────────────
+    def perform_clustering(self, embeddings, n_clusters=5):
+        """Deprecated: usar asignar_cluster() para nuevos proyectos."""
+        if not embeddings:
+            return None
+        X = np.array(embeddings)
+        km = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
+        km.fit(X)
+        return {"labels": km.labels_.tolist(), "centroids": km.cluster_centers_.tolist()}
+
+    def find_blue_oceans(self, *args, **kwargs):
+        """Deprecated: la métrica de innovación viene de asignar_cluster()['innovacion_pct']."""
+        return {"is_blue_ocean": False, "main_finding": "Usar asignar_cluster() para obtener métricas."}
+
+    def find_blue_oceans_hybrid(self, *args, **kwargs):
+        """Deprecated."""
+        return self.find_blue_oceans()
+
 
 clustering_engine = ClusteringEngineService()

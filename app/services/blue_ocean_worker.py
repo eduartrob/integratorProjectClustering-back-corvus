@@ -2,12 +2,13 @@ import asyncio
 import aiohttp
 import json
 import logging
+from app.core.config import settings
 from app.services.blue_ocean_db import blue_ocean_db
 from app.api.routes import analysis_lock
 
 logger = logging.getLogger(__name__)
 
-LLM_SERVICE_URL = "http://llm-service:3003/api/v1/llm/analyze-blue-ocean"
+
 
 class BlueOceanWorker:
     def __init__(self):
@@ -81,7 +82,7 @@ class BlueOceanWorker:
         
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(LLM_SERVICE_URL, json=payload, timeout=120) as response:
+                async with session.post(f"{settings.LLM_SERVICE_URL}/api/v1/llm/analyze-blue-ocean", json=payload, timeout=120) as response:
                     if response.status == 200:
                         return await response.json()
                     else:

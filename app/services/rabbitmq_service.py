@@ -14,13 +14,12 @@ class RabbitMQService:
 
     def _connect(self):
         try:
-            import os
             credentials = pika.PlainCredentials(
-                os.getenv('RABBITMQ_USER', 'corvus_admin'), 
-                os.getenv('RABBITMQ_PASS', 'corvus_secret')
+                settings.RABBITMQ_USER, 
+                settings.RABBITMQ_PASS
             )
             parameters = pika.ConnectionParameters(
-                host=os.getenv('RABBITMQ_HOST', 'rabbitmq'),
+                host=settings.RABBITMQ_HOST,
                 credentials=credentials,
                 heartbeat=0
             )

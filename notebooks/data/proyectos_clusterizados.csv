@@ -1,0 +1,1153 @@
+id_documento,texto_extraido,categoria_calidad,razon_etiqueta,prediccion_ia,id_cluster,nombre_cluster
+ANTIGRAVITY_001,"NOMBRE DEL PROYECTO: Sistema Inteligente de Monitoreo de Tráfico. CATEGORÍA: Smart Cities e IA. PROBLEMÁTICA: La congestión vehicular incrementa las emisiones de CO2 y el tiempo de traslado. OBJETIVOS: 1. Entrenar un modelo de YOLOv8 para contar vehículos. 2. Desplegar métricas en un dashboard web en tiempo real. JUSTIFICACIÓN: Permite a las autoridades tomar decisiones basadas en datos. USUARIOS: Secretarías de movilidad. FUNCIONALIDADES: Detección de autos, motos y camiones. TECNOLOGÍAS: Python, OpenCV, YOLOv8, React, Node.js. BIBLIOGRAFÍA: Redmon, J., et al. (2016). You Only Look Once.",Excelente,"Estructura completa, realista, uso correcto de jerga técnica y tecnologías coherentes para visión por computadora.",Excelente,7,Blockchain y Web3
+ANTIGRAVITY_002,"Nombre: App de Tutorias. Categoria: movil. Problematica: los alumnos reprueban calculo. objetivos: hacer una app para que busquen asesores. Justificacion: ayudar a pasar materias. Usuarios: estudiantes. Funcionalidades: login, chat, agendar. Tecnologias: Flutter y Firebase.",Regular,"Tiene estructura básica y tecnologías válidas, pero la redacción es muy superficial y carece de rigor académico profundo.",Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_004,"public static void main(String[] args) { System.out.println(""Hola Mundo""); for(int i=0; i<10; i++){ count++; } } // TODO: Terminar el controlador de usuarios mañana",Ruido,Fragmento de código fuente en Java subido por accidente en lugar del documento del proyecto.,Regular,6,Analítica y Ciencia de Datos
+ANTIGRAVITY_005,"NOMBRE DEL PROYECTO: Detección de Fraudes con Grafos. CATEGORÍA: Ciberseguridad e IA. PROBLEMÁTICA: Los sistemas tradicionales basados en reglas fallan al detectar fraudes financieros complejos. OBJETIVOS: Modelar transacciones como grafos y aplicar Graph Neural Networks (GNN). JUSTIFICACIÓN: Reduce falsos positivos en bloqueos de tarjetas. USUARIOS: Bancos. TECNOLOGÍAS: Neo4j, PyTorch Geometric, FastAPI. BIBLIOGRAFÍA: Kipf, T. N., & Welling, M. (2016). Semi-supervised classification with graph convolutional networks.",Excelente,"Uso avanzado de IA (GNN), coherencia en el problema de ciberseguridad y tecnologías precisas (Neo4j, PyTorch Geometric).",Excelente,7,Blockchain y Web3
+ANTIGRAVITY_006,proyecto de punto d venta. vamos a aser un punto de venta en java con mysql para la ferreteria de mi tio. va a tener usuarios y contraseñas. ademas va a imprimir tikets.,Regular,"Redacción deficiente con faltas de ortografía ('aser', 'tikets', minúsculas), pero describe un proyecto de software funcional.",Regular,7,Blockchain y Web3
+ANTIGRAVITY_007,"TITULO: API REST para E-commerce. PROBLEMÁTICA: Falta de integración entre frontend y base de datos. OBJETIVOS: Crear endpoints para productos, carrito y pagos. JUSTIFICACIÓN: Desacoplar la arquitectura mejora la escalabilidad. USUARIOS: Desarrolladores frontend. TECNOLOGÍAS: Express.js, MongoDB, JWT, Stripe.",Excelente,"Arquitectura clara, aborda un problema real de backend y enumera tecnologías estándar del mercado web.",Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_008,app para adoptar perritos. tecnologias kotlin y sqlite. justificacion: hay muchos perros en la calle.,Regular,"Extremadamente breve, aunque contiene tecnologías válidas, le faltan múltiples secciones de la plantilla.",Excelente,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_011,"NOMBRE DEL PROYECTO: Clasificación de Residuos Sólidos con Edge Computing. CATEGORÍA: IoT e IA. PROBLEMÁTICA: Separación manual ineficiente de basura. OBJETIVOS: 1. Entrenar MobileNetV2. 2. Desplegar en Raspberry Pi. JUSTIFICACIÓN: Automatización en plantas de reciclaje. TECNOLOGÍAS: TensorFlow Lite, Raspberry Pi, Python. BIBLIOGRAFÍA: Howard, A. G., et al. (2017). MobileNets.",Excelente,Excelente integración de Hardware (Raspberry) y Software (TF Lite) abordando un problema ecológico válido.,Regular,7,Blockchain y Web3
+ANTIGRAVITY_012,Titulo: sistema de biblioteca. se trata de prestar libros y q te avise si te pasas de la fecha. usar php y html.,Regular,"Proyecto escolar muy típico. Le falta justificación, objetivos estructurados y detalles técnicos.",Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_014,"INGREDIENTES: 500g de harina, 2 huevos, 1 taza de leche, mantequilla. PREPARACIÓN: Mezclar todo en un bol hasta que quede suave. Hornear a 180 grados por 30 minutos.",Ruido,Receta de cocina mezclada entre los PDFs.,Regular,8,Automatización de Infraestructura
+ANTIGRAVITY_015,"NOMBRE DEL PROYECTO: Pipeline CI/CD Automatizado para Microservicios. CATEGORÍA: DevOps. PROBLEMÁTICA: Despliegues manuales propensos a errores en el equipo. OBJETIVOS: Automatizar testing, linting y despliegue a Kubernetes. JUSTIFICACIÓN: Reduce el time-to-market y mejora la estabilidad. TECNOLOGÍAS: GitHub Actions, Docker, Kubernetes, Terraform. BIBLIOGRAFÍA: Fowler, M. (2006). Continuous Integration.",Excelente,"Enfoque puro en DevOps e Infraestructura, perfectamente descrito con herramientas actuales (Terraform, K8s).",Excelente,7,Blockchain y Web3
+ANTIGRAVITY_016,PROYECTO: clon de netflix. TECNOLOGIAS: react y node. OBJETIVOS: hacer una pagina q reprodusca videos de youtube parecida a netflix. JUSTIFICACION: es para aprender.,Regular,"Ortografía regular, motivación puramente académica sin impacto real, pero es un proyecto de software válido.",Excelente,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_017,"NOMBRE DEL PROYECTO: Optimización de Rutas Logísticas con Algoritmos Genéticos. CATEGORÍA: Investigación de Operaciones / IA. PROBLEMÁTICA: Altos costos de combustible en flotas de reparto. OBJETIVOS: Implementar AG para resolver el problema del agente viajero (TSP) con restricciones de tiempo. JUSTIFICACIÓN: Minimización de costos operativos. TECNOLOGÍAS: Python, DEAP (Distributed Evolutionary Algorithms in Python), Google Maps API.",Excelente,"Resolución de un problema clásico (TSP) usando heurísticas avanzadas, muy bien fundamentado.",Regular,7,Blockchain y Web3
+ANTIGRAVITY_018,"Nombre: Gestor de Tareas. Categoria Web. Funcionalidades: crear tarea, borrar tarea, poner completada. Usaremos angular y css puro.",Regular,"Un To-Do list básico, sin innovación, pero cumple con ser un desarrollo web.",Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_021,"NOMBRE DEL PROYECTO: Chatbot de Soporte Técnico con RAG. CATEGORÍA: NLP / IA. PROBLEMÁTICA: Tiempos de respuesta lentos en el helpdesk de TI. OBJETIVOS: Integrar Retrieval-Augmented Generation con documentación interna. JUSTIFICACIÓN: Respuestas precisas evitando alucinaciones de LLMs puros. TECNOLOGÍAS: LangChain, ChromaDB, OpenAI API, Python. BIBLIOGRAFÍA: Lewis, P., et al. (2020). Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks.",Excelente,"Uso de arquitecturas modernas (RAG) para LLMs, menciona la prevención de alucinaciones y base de datos vectorial.",Regular,7,Blockchain y Web3
+ANTIGRAVITY_022,Titulo: sistema escolar. Justificacion: las escuelas usan papel. Problematica: se pierden los papeles. Funcionalidades: registrar alumnos y maestros. Tecnologias: c# y sql server.,Regular,"Estructura mezclada y desordenada, redacción pobre, proyecto genérico de control escolar.",Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_024,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.",Ruido,Texto de prueba Lorem Ipsum.,Regular,6,Analítica y Ciencia de Datos
+ANTIGRAVITY_025,"NOMBRE DEL PROYECTO: Detección de Anomalías en Servidores Linux. CATEGORÍA: Ciberseguridad / Machine Learning. PROBLEMÁTICA: Dificultad para detectar intrusiones en tiempo real. OBJETIVOS: Entrenar un modelo Isolation Forest con logs de sistema (syslog/auth.log). JUSTIFICACIÓN: Seguridad proactiva sin firmas estáticas. TECNOLOGÍAS: ELK Stack (Elasticsearch, Logstash, Kibana), Scikit-Learn. BIBLIOGRAFÍA: Liu, F. T., et al. (2008). Isolation Forest.",Excelente,"Proyecto sólido de ML aplicado a logs de servidores, herramientas estándar (ELK) y algoritmo correcto (Isolation Forest).",Excelente,7,Blockchain y Web3
+ANTIGRAVITY_026,proyecto: pagina pa vender comida. usamos react. los usuarios son los que compran. y los restaurantes. nomas eso.,Regular,"Redacción coloquial ('pa', 'nomas'), carece de la mayoría de las secciones formales.",Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_027,"NOMBRE DEL PROYECTO: Sistema Recomendador de Películas. CATEGORÍA: Machine Learning. PROBLEMÁTICA: Sobrecarga de información en plataformas de streaming. OBJETIVOS: Filtrado colaborativo basado en ítems. JUSTIFICACIÓN: Mejora la retención de usuarios. TECNOLOGÍAS: Python, Pandas, Surprise Library.",Excelente,"Proyecto clásico de ciencia de datos, bien fundamentado y utilizando librerías adecuadas (Surprise).",Excelente,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_028,titul0: app de gym. objetibos: acer rutinas. justificacion: para q la gente no se lastime. tecnologias: flutter y node.,Regular,"Contiene errores ortográficos severos ('acer', 'titul0', 'q'), pero la propuesta de software es distinguible.",Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_030,SELECT * FROM usuarios WHERE email = 'test@test.com'; UPDATE usuarios SET status = 'activo'; DROP TABLE proyectos;,Ruido,"Consultas SQL sueltas, probablemente una filtración accidental de apuntes de bases de datos.",Excelente,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_031,"NOMBRE DEL PROYECTO: Analizador de Sentimientos Financieros. CATEGORÍA: NLP / Finanzas. PROBLEMÁTICA: Volatilidad de mercados impulsada por noticias. OBJETIVOS: Extraer titulares financieros y clasificarlos con FinBERT. JUSTIFICACIÓN: Herramienta de apoyo para traders algorítmicos. TECNOLOGÍAS: HuggingFace, FinBERT, Beautiful Soup, FastAPI. BIBLIOGRAFÍA: Araci, D. (2019). FinBERT: Financial Sentiment Analysis with Pre-trained Language Models.",Excelente,"Uso de modelos pre-entrenados de dominio específico (FinBERT), Web Scraping y despliegue por API.",Excelente,7,Blockchain y Web3
+ANTIGRAVITY_032,nombre: juego del gato. problematica: aburrimiento. justificacion: diversion. tecnologias: python con tkinter. usuarios: todos.,Regular,"Desarrollo de un juego de tres en raya (gato), válido para introducción a la programación pero carente de profundidad.",Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_034,"Y todo me recuerda a ti, en las noches frías de invierno, buscando tu mirada entre la multitud, sabiendo que nunca volverás a ser mía.",Ruido,"Letra de una canción o poema poético, sin ningún valor ingenieril.",Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_035,"NOMBRE DEL PROYECTO: Plataforma de Telemedicina Descentralizada. CATEGORÍA: Web3 e Ingeniería de Software. PROBLEMÁTICA: Falta de control del paciente sobre su historial clínico. OBJETIVOS: Crear Smart Contracts para permisos de acceso médico. JUSTIFICACIÓN: Otorga soberanía de datos al usuario. TECNOLOGÍAS: Solidity, Ethereum, React, IPFS. BIBLIOGRAFÍA: Nakamoto, S. (2008). Bitcoin: A Peer-to-Peer Electronic Cash System.",Excelente,Aplicación realista de Web3/Blockchain resolviendo un problema de privacidad en historiales médicos.,Regular,7,Blockchain y Web3
+ANTIGRAVITY_036,sistema de inventario. usuarios: bodega. justificacion: se pierden cosas. problematica: mucho papel. tecnologia: java spring boot.,Regular,"Muy conciso, estructurado con etiquetas, pero le falta desarrollo argumentativo.",Regular,7,Blockchain y Web3
+ANTIGRAVITY_037,"NOMBRE DEL PROYECTO: Detección de Caídas en Adultos Mayores. CATEGORÍA: IoT e IA. PROBLEMÁTICA: Alto riesgo de mortalidad por caídas no atendidas. OBJETIVOS: Integrar acelerómetro MPU6050 y clasificar con SVM. JUSTIFICACIÓN: Alerta temprana a familiares. TECNOLOGÍAS: ESP32, MQTT, Scikit-learn. BIBLIOGRAFÍA: Noury, N., et al. (2007). Fall detection principles.",Excelente,"Excelente integración de sensores, telemetría (MQTT) y aprendizaje automático clásico (SVM).",Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_038,titulo: red social para perros. categorias: web. objetivos: que los perros tengan perfil. tecnologias: php y mysql. fin.,Regular,"Idea trivial, redacción muy informal ('fin.'), sin justificación técnica ni métricas.",Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_040,Comprobante de Domicilio. Recibo de Luz CFE. Periodo de facturación: Mayo - Junio. Total a pagar: $450.00 MXN. Fecha límite de pago: 15 de Julio.,Ruido,Un recibo de luz que algún estudiante subió accidentalmente a la plataforma en lugar de su protocolo.,Regular,7,Blockchain y Web3
+ANTIGRAVITY_041,"NOMBRE DEL PROYECTO: Predicción de Fuga de Clientes (Churn). CATEGORÍA: Ciencia de Datos. PROBLEMÁTICA: Alto costo de adquisición vs retención. OBJETIVOS: Modelar comportamiento de usuarios con XGBoost. JUSTIFICACIÓN: Retener clientes es 5 veces más barato que adquirir nuevos. TECNOLOGÍAS: Python, Pandas, XGBoost, SHAP para explicabilidad.",Excelente,Problema de negocio clásico resuelto con técnicas robustas e inclusión de explicabilidad de modelos (SHAP).,Excelente,7,Blockchain y Web3
+ANTIGRAVITY_042,app de recetas. tecnologias android studio y java. para guardar recetas de cocina.,Regular,"Demasiado corto. Falta la problemática y los objetivos, pero se entiende que es una app móvil nativa.",Regular,8,Automatización de Infraestructura
+ANTIGRAVITY_043,"NOMBRE DEL PROYECTO: Simulación de Fluidos con CUDA. CATEGORÍA: Computación de Alto Rendimiento. PROBLEMÁTICA: Simulaciones en CPU toman días. OBJETIVOS: Paralelizar algoritmo Navier-Stokes en GPU. JUSTIFICACIÓN: Acelera drásticamente renderizados y cálculos científicos. TECNOLOGÍAS: C++, CUDA, OpenGL.",Excelente,"Proyecto altamente técnico de High Performance Computing, fundamentado y con herramientas especializadas.",Excelente,7,Blockchain y Web3
+ANTIGRAVITY_044,pagina de noticias. html css javascript bootstrap. para ver las noticias del dia.,Regular,Proyecto frontend estático básico.,Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_046,Instrucciones para armar el librero BILLY de IKEA. Paso 1. Inserte los taquetes de madera en los orificios laterales. Paso 2. Atornille con la llave Allen incluida.,Ruido,Manual de ensamblaje de muebles.,Regular,7,Blockchain y Web3
+ANTIGRAVITY_047,"NOMBRE DEL PROYECTO: Traductor Automático Lengua de Señas a Texto. CATEGORÍA: Computer Vision / NLP. PROBLEMÁTICA: Barrera de comunicación para personas sordomudas. OBJETIVOS: Extraer landmarks con MediaPipe y secuenciar con LSTM. JUSTIFICACIÓN: Inclusión social. TECNOLOGÍAS: Python, MediaPipe, Keras, TensorFlow.",Excelente,Proyecto muy ambicioso y bien planteado combinando extracción de landmarks de video con redes recurrentes.,Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_048,sistema de citas para dentista. php puro sin frameworks y mysql. justificacion: mi dentista usa agenda de papel.,Regular,"Problema real, solución válida aunque anticuada (PHP puro), sin mención de IA o arquitecturas modernas.",Regular,0,Visión Artificial Edge
+ANTIGRAVITY_050,[2026-05-12 14:02:01] ERROR: NullReferenceException at UserAuth.Login() in /src/controllers/UserAuth.cs:line 45,Ruido,Un extracto de un log de errores de servidor pegado por error.,Regular,5,Desarrollo Móvil Multiplataforma
+RST_001,"Proyecto integrador
+
+Sistema web para citas medicas en una clinica escolar
+El obgetivo es reducir las filas y el tiempo de espera usando una plataforma sencilla con login, agenda y recordatorios por correo. La propuesta plantea usar Django, SQLite y Bootstrap, porque el equipo ya conoce un poco Python y eso ayuda a terminar a tiempo.
+
+Se haran pruebas con 20 usuarios de la clinica universitaria y se medira tiempo de registro, cancelacion y busqueda. Tambien se piensa agregar reportes semanales en PDF.
+Aunque el texto tiene una que otra palabra cortada por OCR, la idea se entiende y el alcance no parece tan grande.
+
+Capitulo II aparece en medio del parrafo por error.",Regular,"Problema concreto, stack plausible, alcance moderado y validación mínima.",Regular,0,Visión Artificial Edge
+RST_002,"Proyecto final
+
+Aplicacion para detectar plagio entre tareas estudiantiles
+La idea es comparar documentos subidos por el profesor y mostrar un porcentaje de similitud. Se propone hacer el frontend con React y el backend en FastAPI, usando una base de datos ligera para guardar reportes.
+
+La validacion se haria con una coleccion de 100 tareas antiguas y una prueba manual de coincidencia. Se menciona usar NLP y una libreria de embeddings, aunque el equipo todavia no define cual.
+El texto tiene una redaccion medio rara y una linea que dice pagina 3 de 8, pero se entiende la necesidad.
+
+El alcance parece razonable para un semestre.",Excelente,"Caso realista, solución viable y validación básica.",Excelente,3,IoT y Sensores MPU
+RST_003,"Proyecto integrador
+
+Sistema de inventario para una papeleria pequena
+Se quiere registrar entradas, salidas, proveedores y alertas de stock bajo. La solucion se haria con PHP, MySQL y una interfaz web simple para que el dueño la use sin complicarse.
+
+El documento menciona reportes mensuales y respaldo de datos. No es una propuesta muy moderna, pero si util y bastante realista para un proyecto escolar.
+Hay algunas faltas como implementacion y obgetivo, ademas de un encabezado repetido capitulo II.
+
+Se propone probarlo con datos simulados y validar si se reducen errores en el control manual.",Regular,"Viable, concreto y con validación sencilla.",Regular,7,Blockchain y Web3
+RST_004,"Proyecto integrador
+
+Asistente de consultas para reglamentos universitarios
+El objetivo es construir una herramienta que permita buscar normas, fechas y requisitos dentro de documentos PDF. La propuesta usa FastAPI, un modelo de lenguaje local y una base vectorial, porque la informacion cambia seguido y conviene no depender de internet.
+
+Se planea evaluar con exactitud de respuesta, tiempo de consulta y porcentaje de respuestas sin contexto. El alcance incluye solo documentos oficiales de una facultad.
+Hay saltos de linea raros y una frase partida por OCR, pero la arquitectura se ve clara.
+
+Pagina 5 de 11.",Excelente,"Problema claro, tecnología coherente y métricas de evaluación.",Excelente,3,IoT y Sensores MPU
+RST_005,"Trabajo recepcional
+
+Deteccion de emociones en clase mediante camara web
+Se propone usar vision computacional para reconocer si los estudiantes estan atentos, aburridos o confundidos. La idea menciona YOLO, OpenCV y un dashboard para mostrar resultados en tiempo real.
+
+El problema es concreto, aunque la redaccion tiene detalles mezclados y una parte dice capitulo III en medio del resumen.
+Se dice que se probaria con videos grabados en laboratorio y se compararian resultados por expresion facial.
+
+Es una propuesta ambiciosa, pero todavia dentro de lo posible si se limita bien el alcance.",Excelente,"Tecnología plausible y validación posible, aunque ambiciosa.",Excelente,3,IoT y Sensores MPU
+RST_006,"Proyecto final
+
+Sistema de limpieza de datos automatico para una empresa
+La propuesta busca eliminar registros duplicados, normalizar nombres y corregir formatos de fechas. Se plantean scripts en Python, pandas y una pequeña interfaz web con Flask.
+
+El texto tiene errores menores y parece extraido de un PDF con OCR malo, pero deja ver una necesidad operativa real. Se evaluaria comparando tiempo manual contra tiempo automatizado.
+
+pagina 2 de 6 aparece al centro del documento.",Regular,"Solución concreta, medible y de alcance controlado.",Regular,7,Blockchain y Web3
+RST_007,"Proyecto integrador
+
+App movil para reportar baches en la ciudad
+Se propone una aplicacion donde el usuario suba foto, ubicacion y comentario. El backend se haria con FastAPI y la app en Flutter, con mapas y notificaciones basicas.
+
+La validacion seria por numero de reportes aceptados y tiempo de respuesta del servidor. El texto tiene una mezcla rara de mayusculas y minusculas, pero no se pierde la idea principal.
+Tambien se menciona almacenar evidencia para que el municipio revise el caso.
+
+Es una idea bastante aterrizada y facil de defender.",Excelente,"Problema concreto, stack razonable y validación simple.",Excelente,3,IoT y Sensores MPU
+RST_008,"Tesis
+
+Clasificacion de tickets de soporte tecnico con Transformer
+La propuesta busca separar solicitudes de software, hardware y red usando un encoder multilingue. Se expone un servicio API con FastAPI y se guarda historial en PostgreSQL.
+
+Se planea medir F1 macro, precision por clase y tiempo de inferencia. El documento dice que se entrenara con tickets historicos del departamento de TI, lo cual da una fuente real de datos.
+Hay un fragmento que dice pagina 8 de 13 en medio del abstract.
+
+Aunque no esta perfecta la redaccion, la solucion si parece aprobable.",Excelente,"Problema real, modelo moderno y evaluación adecuada.",Excelente,7,Blockchain y Web3
+RST_009,"Proyecto final
+
+Control escolar con registro de asistencia por codigo QR
+El sistema registrara entrada y salida de alumnos usando una camara y un lector QR. Se plantea usar Python, Flask y SQLite para una version inicial.
+
+La validacion seria comparar asistencia manual contra digital durante dos semanas. Hay errores como tecnoologia y una linea suelta capitulo II, pero la propuesta sigue siendo entendible.
+
+No se busca algo enorme, solo agilizar un proceso repetitivo del laboratorio.",Regular,"Caso práctico, implementación viable y alcance acotado.",Excelente,7,Blockchain y Web3
+RST_010,"Proyecto integrador
+
+Plataforma web para seguimiento de practicas profesionales
+Se propone que el alumno suba avances, constancias y evidencias, mientras el asesor revisa y comenta desde un panel. La tecnologia propuesta es Laravel con MySQL y notificaciones por correo.
+
+Se dice que el sistema reducira perdida de documentos y tiempos de revision. La evaluacion seria mediante encuesta de satisfaccion y tiempo promedio de respuesta.
+El texto tiene frases cortadas y un 1 de 4 incrustado, pero se entiende.
+
+Es una propuesta tradicional pero aceptable.",Regular,Solución funcional y realista con validación básica.,Excelente,7,Blockchain y Web3
+RST_011,"Proyecto final
+
+Asistente offline para bibliografia de tesis
+La idea es indexar manuales, normas y guias en un buscador local con respuestas citadas. Se menciona FastAPI, un modelo pequeno cuantizado y una base vectorial sencilla.
+
+La propuesta habla de medir precision de respuesta y tiempo de consulta. El alcance se limita a una sola carrera, lo cual ayuda mucho.
+Hay errores leves de ortografia y una parte del texto esta partida por OCR, pero sigue siendo coherente.
+
+capitulo IV aparece como encabezado suelto.",Excelente,"Problema definido, solución técnica plausible y alcance limitado.",Excelente,3,IoT y Sensores MPU
+RST_012,"Trabajo recepcional
+
+Sistema de cafeteria universitaria para pedidos en linea
+Se propone una web donde los alumnos vean menu, hagan pedidos y paguen en efectivo al recoger. El stack seria Django, Bootstrap y una base de datos relacional.
+
+La validacion se haria con prueba piloto en horas pico y conteo de pedidos atendidos. El texto es algo desordenado, con mayusculas raras y una nota pagina 3 de 7.
+
+Aun asi, se entiende que el objetivo es evitar filas y errores al tomar comandas.",Regular,"Uso realista, stack sencillo y validación operativa.",Regular,7,Blockchain y Web3
+RST_013,"Proyecto integrador
+
+Sistema de recomendaciones para cursos optativos
+Se quiere usar embeddings para sugerir materias segun intereses del alumno y su historial academico. El backend estaria en FastAPI y el front en React.
+
+Se menciona medir tasa de clics, similitud y aceptacion de recomendaciones. El documento no es perfecto, pero si presenta problema, enfoque y una forma de evaluar.
+
+Hay una linea que dice capitulo I en medio de la explicacion y otra con texto duplicado.
+
+La idea es bastante convincente para un proyecto universitario.",Excelente,"Tiene problema claro, tecnología viable y métricas sencillas.",Excelente,3,IoT y Sensores MPU
+RST_014,"Proyecto final
+
+Sistema para detectar caidas de red en un laboratorio
+La propuesta consiste en monitorear ping, paquetes perdidos y disponibilidad de equipos. Se usarian scripts en Python, una API ligera y un dashboard con graficas.
+
+El objetivo es avisar cuando un router o switch falle. Se probaria con simulaciones de desconexion y se compararia el tiempo de deteccion.
+El texto tiene un par de errores de redaccion, pero no pierde sentido.
+
+Es una solucion bastante razonable para una materia de redes o software.",Regular,"Caso concreto, implementación posible y validación medible.",Excelente,7,Blockchain y Web3
+RST_015,"Proyecto integrador
+
+Clasificador de correos institucionales
+Se propone clasificar mensajes en becas, pagos, servicios y eventos usando un Transformer pequeno o un modelo ya entrenado. La interfaz se haria con FastAPI y una pagina web simple.
+
+La validacion incluiria F1 macro y precision por clase, ademas de revisar ejemplos manuales. Se indica que el conjunto de datos saldra de correos anonimizados del campus.
+
+El texto trae una mezcla de mayusculas y una frase mal cortada por OCR, pero el contenido sigue siendo serio.
+
+Pagina 6 de 10 aparece al final.",Excelente,"Problema real, solución factible y validación clara.",Excelente,3,IoT y Sensores MPU
+RST_016,"Proyecto final
+
+Sistema de inventario para taller mecanico
+El equipo quiere registrar refacciones, entradas y salidas, y avisar cuando el stock sea bajo. Se plantea usar PHP y MySQL, con formularios sencillos y reportes PDF.
+
+La propuesta no es innovadora, pero si util para un negocio pequeno. Se menciona probar el sistema con datos reales del taller y revisar si bajan los errores manuales.
+Hay errores leves como implementacion y obgetivo, además de un capitulo II repetido.
+
+Es una propuesta aceptable por ser concreta y viable.",Regular,"Funcional, realista y con alcance bien acotado.",Regular,7,Blockchain y Web3
+RST_017,"Proyecto integrador
+
+Chatbot para preguntas frecuentes de admision
+Se propone una herramienta web para contestar dudas sobre requisitos, pagos y fechas. El backend se haria en FastAPI, con una base de conocimiento y respuestas predefinidas para casos sensibles.
+
+La validacion seria por porcentaje de preguntas resueltas y tiempo de respuesta. El texto tiene fallas de OCR, pero la idea se entiende.
+
+pagina 4 de 9 aparece dentro del segundo parrafo.",Regular,"Problema específico, solución simple y métricas básicas.",Excelente,7,Blockchain y Web3
+RST_018,"Proyecto final
+
+Aplicacion para control de prestamos de equipo audiovisual
+Se busca registrar camaras, tripies y microfonos prestados a alumnos. La propuesta usa Laravel, MySQL y autenticacion por usuarios.
+
+Se plantea evaluar con pruebas de uso y conteo de incidencias antes y despues. El texto tiene redaccion un poco torpe, pero no esta fuera de contexto.
+
+La idea es bastante realista para un proyecto de semestre.",Regular,"Solución sencilla, viable y con validación operativa.",Regular,7,Blockchain y Web3
+RST_019,"Proyecto integrador
+
+Deteccion de plagio en textos cortos
+Se sugiere comparar entregas de estudiantes con una base de documentos previos usando similitud semantica. La propuesta menciona Python, embeddings y una API REST.
+
+La redaccion es irregular y hay un capitulo III suelto, pero se entiende que el objetivo es apoyar al profesor.
+Se evaluaria con ejemplos conocidos y una lista de falsos positivos.
+
+Es una idea util y defendible.",Excelente,"Problema concreto, tecnología plausible y evaluación básica.",Excelente,3,IoT y Sensores MPU
+RST_020,"Proyecto final
+
+Sistema de seguimiento de tutorias
+Se propone una web para registrar citas, observaciones y avances de alumnos con riesgo academico. La tecnologia sugerida es Django con PostgreSQL y un panel administrativo.
+
+El documento menciona graficas por alumno y alertas cuando falten registros. Tiene errores leves y un 1 de 5 incrustado, pero el alcance esta bien definido.
+
+La propuesta parece aprobable sin verse exagerada.",Regular,"Problema claro, stack razonable y alcance controlado.",Excelente,7,Blockchain y Web3
+RST_033,"Proyecto final
+
+Resumen de bienvenida de la facultad
+La universidad da la bienvenida al semestre con actividades academicas, charlas, conferencias y registro de nuevos alumnos.
+
+No hay objetivo de investigacion ni desarrollo de software. El texto parece una nota institucional extraida de un boletin.
+pagina 1 de 2 aparece al final.
+
+No corresponde a una propuesta.",Ruido,"Contenido institucional, no una propuesta académica.",Regular,3,IoT y Sensores MPU
+RST_034,"TEMARIO DE CLASE
+
+Unidad 3: bases de datos
+- tablas
+- llaves
+- consultas
+- normalizacion
+- practicas en SQL
+
+Actividad: responder preguntas y entregar resumen.
+El texto no presenta problema, alcance ni metodologia.
+Capitulo I aparece como encabezado suelto.
+
+Es material de clase, no proyecto.",Ruido,Es un temario académico sin intención de propuesta.,Regular,5,Desarrollo Móvil Multiplataforma
+RST_036,"Fragmento extraido
+
+La coordinacion academica informa que la entrega de formatos, credenciales y horarios sera del 4 al 8 de agosto.
+Tambien se recuerda asistir a la reunion de tutores y revisar el calendario oficial.
+
+No hay propuesta tecnica ni objetivo de desarrollo.
+
+Pagina 3 de 4.",Ruido,"Es un aviso administrativo, no una propuesta de proyecto.",Regular,7,Blockchain y Web3
+RST_037,"TEMARIO
+
+Sesion 5: vision por computadora
+Se revisaran filtros, deteccion de bordes y ejemplos de YOLO.
+Tarea: leer capitulo y contestar cuestionario.
+
+No hay problema de investigacion, solo contenido de clase.
+
+1 de 10.",Ruido,Material didáctico sin estructura de proyecto.,Excelente,1,Sistemas Web Tradicionales
+RST_039,"Proyecto integrador
+
+Sistema web para registrar prestamos de laboratorio de computo
+Se propone un panel para reservar equipos, ver disponibilidad y registrar entregas. La solucion usaría Django, SQLite y un poco de Bootstrap.
+
+El alcance es pequeño y realista, pero el texto esta medio desordenado. Hay una palabra mal escrita y una linea con pagina 6 de 9.
+Se indica que se probaria con usuarios de un solo laboratorio durante un mes.
+
+La propuesta si parece aprobable, aunque no muy sofisticada.",Regular,"Problema claro, solución viable y validación mínima.",Regular,7,Blockchain y Web3
+RST_040,"Proyecto final
+
+Deteccion de placas de inventario con OCR
+La idea es capturar imagenes de etiquetas, leer el codigo y guardarlo automaticamente en una base de datos. Se plantea usar OpenCV, un OCR ligero y FastAPI.
+
+Se evaluaria con tasa de lectura correcta y tiempo por imagen. El texto tiene redaccion algo tosquita y capitulo II en un renglón suelto, pero el proyecto sigue siendo entendible.
+
+Es una propuesta bastante aterrizada para un semestre.",Excelente,"Caso concreto, stack plausible y métricas sencillas.",Excelente,1,Sistemas Web Tradicionales
+RST_041,"Trabajo recepcional
+
+Sistema de reportes de mantenimiento para equipos de laboratorio
+La propuesta busca registrar fallas, asignar tecnicos y generar reportes PDF. Se haria con Laravel y MySQL, porque el equipo ya hizo algo parecido en otra materia.
+
+Se habla de medir tiempos de registro y reduccion de incidencias perdidas. El texto tiene errores pequeños de ortografia, pero se entiende.
+
+pagina 4 de 7 aparece entre el objetivo y la justificacion.",Regular,"Solución realista, problema concreto y validación operativa.",Regular,7,Blockchain y Web3
+RST_042,"Proyecto integrador
+
+Asistente para buscar documentos internos de la facultad
+Se propone subir archivos PDF y permitir consultas por palabras clave o significado. La tecnologia seria FastAPI, embeddings y una base vectorial sencilla.
+
+El proyecto limitaria su alcance a reglamentos y comunicados de una sola escuela. Se validaria con preguntas reales de alumnos y tiempo de respuesta.
+Hay un capitulo III que aparece al final del abstract y algunas mayusculas raras.
+
+Aun con eso, la propuesta es aceptable.",Excelente,"Problema definido, solución factible y alcance acotado.",Excelente,3,IoT y Sensores MPU
+RST_043,"Proyecto final
+
+Sistema de prestamos para libros de aula
+La idea es controlar libros, prestamos y devoluciones en una plataforma muy simple. Se piensa usar PHP, MySQL y un panel administrativo basico.
+
+La validacion seria comparar el control manual contra el digital por dos semanas. El texto tiene frases cortadas y una linea que dice pagina 2 de 5.
+
+No es innovador, pero si suficientemente claro para aprobarse.",Regular,Solución sencilla y viable con validación básica.,Regular,2,RAG y Búsqueda Semántica
+RST_044,"Proyecto integrador
+
+Clasificacion de solicitudes de beca
+Se plantea un modelo de NLP para separar solicitudes completas, incompletas y urgentes. El backend estaria en FastAPI y el modelo seria un Transformer pequeño.
+
+Se evaluaria con F1 y precision por clase, usando historicos anonimizados del departamento. La redaccion tiene errores de OCR, pero el planteamiento es claro y medible.
+
+Es una propuesta realista y con sentido academico.",Excelente,"Problema concreto, tecnología actual y métricas claras.",Excelente,7,Blockchain y Web3
+RST_045,"Proyecto final
+
+Sistema de control de colas para cafeteria escolar
+Se quiere hacer una web para mostrar pedidos, numero de turno y estado de entrega. La tecnologia propuesta es Django con una base de datos relacional y notificaciones sencillas.
+
+El texto menciona pruebas de campo en horas de comida y conteo de tiempos de espera. Hay un 1. 2. 3. incrustado, pero no afecta mucho la comprension.
+
+La propuesta es viable y util.",Regular,"Caso práctico, solución viable y validación simple.",Regular,7,Blockchain y Web3
+RST_046,"Proyecto integrador
+
+Sistema de busqueda semantica para manuales tecnicos
+Se pretende indexar manuales en PDF y permitir que el usuario haga preguntas por lenguaje natural. Se sugiere usar FastAPI, Qdrant y un modelo local cuantizado.
+
+La propuesta incluye medir recall@5 y tiempo de consulta. El documento tiene un par de errores como tecnologia y obgetivo, pero la idea sigue siendo fuerte.
+
+Es una propuesta bastante aprobable.",Excelente,"Tecnología plausible, evaluación clara y alcance razonable.",Excelente,7,Blockchain y Web3
+RST_049,"Proyecto final
+
+Resumen de actividades de la semana cultural
+Se presentaron concursos, conferencias, fotografias y agradecimientos a los patrocinadores.
+
+No existe problema de investigacion ni desarrollo de software. El texto parece un comunicado institucional con pagina 1 de 3.
+
+Es claramente ruido.",Ruido,"Es un comunicado, no una propuesta académica.",Regular,4,Gestión de Redes y Ciberseguridad
+RST_050,"TEMARIO DE PROGRAMACION
+
+Unidad 2: estructuras de control
+- if
+- else
+- while
+- for
+- ejercicios
+
+Actividad: resolver problemas y subir captura.
+No hay objetivos de proyecto ni validacion.
+
+Es material de clase y no una propuesta.",Ruido,Es un temario docente sin intención de proyecto.,Regular,5,Desarrollo Móvil Multiplataforma
+ANTIGRAVITY_300,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_301,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_302,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant.
+
+Capitulo II
+ La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_303,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant.
+
+Capitulo II
+ La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_304,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_305,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. pagina 4 de 10  La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_306,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant.
+
+ver anexo B
+
+ La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_307,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_308,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_309,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. pagina 4 de 10  La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_310,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_311,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. pagina 4 de 10  La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_312,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant.
+
+ver anexo B
+
+ La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_313,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. (figura 3)  La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_314,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant.
+
+ver anexo B
+
+ La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_315,"TRABAJO RECEPCIONAL
+
+APLICACION MOVIL PARA AGENDAR CITAS MEDICAS
+LA APP PERMITIRA A LOS PACIENTES VER HORARIOS DISPONIBLES Y RESERVAR UNA CITA. SE USARA FLUTTER PARA LA APLICACION Y FIREBASE PARA LA BASE DE DATOS Y AUTENTICACION DE USUARIOS. EL ADMINISTRADOR PODRA CANCELAR CITAS DESDE UN PANEL WEB.
+
+NO SE DETALLA ARQUITECTURA DE BACKEND PROPIO NI PRUEBAS AUTOMATIZADAS, PERO SE MENCIONA QUE AYUDARA A REDUCIR TIEMPOS DE ESPERA EN LA CLINICA. EL SISTEMA ENVIARA NOTIFICACIONES PUSH COMO RECORDATORIOS.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Excelente,6,Analítica y Ciencia de Datos
+ANTIGRAVITY_316,"trabajo recepcional
+
+aplicacion movil para agendar citas medicas
+la app permitira a los pacientes ver horarios disponibles y reservar una cita. se usara flutter para la aplicacion y firebase para la base de datos y autenticacion de usuarios. el admini (figura 3) strador podra cancelar citas desde un panel web.
+
+no se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. el sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_317,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El admini (figura 3) strador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_318,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El admini
+
+Capitulo II
+strador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_319,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El admini pagina 4 de 10 strador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_320,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El admini
+
+Capitulo II
+strador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_321,"trabajo recepcional
+
+aplicacion movil para agendar citas medicas
+la app permitira a los pacientes ver horarios disponibles y reservar una cita. se usara flutter para la aplicacion y firebase para la base de datos y autenticacion de usuarios. el administrador podra cancelar citas desde un panel web.
+
+no se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. el sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_322,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El admini
+
+ver anexo B
+
+strador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_323,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El admini (figura 3) strador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_324,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El administrador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_325,"TRABAJO RECEPCIONAL
+
+APLICACION MOVIL PARA AGENDAR CITAS MEDICAS
+LA APP PERMITIRA A LOS PACIENTES VER HORARIOS DISPONIBLES Y RESERVAR UNA CITA. SE USARA FLUTTER PARA LA APLICACION Y FIREBASE PARA LA BASE DE DATOS Y AUTENTICACION DE USUARIOS. EL ADMINISTRADOR PODRA CANCELAR CITAS DESDE UN PANEL WEB.
+
+NO SE DETALLA ARQUITECTURA DE BACKEND PROPIO NI PRUEBAS AUTOMATIZADAS, PERO SE MENCIONA QUE AYUDARA A REDUCIR TIEMPOS DE ESPERA EN LA CLINICA. EL SISTEMA ENVIARA NOTIFICACIONES PUSH COMO RECORDATORIOS.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Excelente,6,Analítica y Ciencia de Datos
+ANTIGRAVITY_326,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El administrador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_327,"TRABAJO RECEPCIONAL
+
+APLICACION MOVIL PARA AGENDAR CITAS MEDICAS
+LA APP PERMITIRA A LOS PACIENTES VER HORARIOS DISPONIBLES Y RESERVAR UNA CITA. SE USARA FLUTTER PARA LA APLICACION Y FIREBASE PARA LA BASE DE DATOS Y AUTENTICACION DE USUARIOS. EL ADMINISTRADOR PODRA CANCELAR CITAS DESDE UN PANEL WEB.
+
+NO SE DETALLA ARQUITECTURA DE BACKEND PROPIO NI PRUEBAS AUTOMATIZADAS, PERO SE MENCIONA QUE AYUDARA A REDUCIR TIEMPOS DE ESPERA EN LA CLINICA. EL SISTEMA ENVIARA NOTIFICACIONES PUSH COMO RECORDATORIOS.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Excelente,6,Analítica y Ciencia de Datos
+ANTIGRAVITY_328,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El administrador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_329,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El administrador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_330,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El administrador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_331,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El administrador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_332,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El admini 1. 2. 3. strador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_333,"TRABAJO RECEPCIONAL
+
+APLICACION MOVIL PARA AGENDAR CITAS MEDICAS
+LA APP PERMITIRA A LOS PACIENTES VER HORARIOS DISPONIBLES Y RESERVAR UNA CITA. SE USARA FLUTTER PARA LA APLICACION Y FIREBASE PARA LA BASE DE DATOS Y AUTENTICACION DE USUARIOS. EL ADMINISTRADOR PODRA CANCELAR CITAS DESDE UN PANEL WEB.
+
+NO SE DETALLA ARQUITECTURA DE BACKEND PROPIO NI PRUEBAS AUTOMATIZADAS, PERO SE MENCIONA QUE AYUDARA A REDUCIR TIEMPOS DE ESPERA EN LA CLINICA. EL SISTEMA ENVIARA NOTIFICACIONES PUSH COMO RECORDATORIOS.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Excelente,6,Analítica y Ciencia de Datos
+ANTIGRAVITY_334,"Trabajo Recepcional
+
+Aplicacion movil para agendar citas medicas
+La app permitira a los pacientes ver horarios disponibles y reservar una cita. Se usara Flutter para la aplicacion y Firebase para la base de datos y autenticacion de usuarios. El administrador podra cancelar citas desde un panel web.
+
+No se detalla arquitectura de backend propio ni pruebas automatizadas, pero se menciona que ayudara a reducir tiempos de espera en la clinica. El sistema enviara notificaciones push como recordatorios.",Regular,Solucion basica en Flutter/Firebase sin arquitectura backend compleja.,Regular,0,Visión Artificial Edge
+ANTIGRAVITY_344,"BOLETIN FACULTAD
+
+Se llevo a cabo la exposicion anual de proyectos de ingenieria, donde se destacaron maquetas de puentes, robots seguidores de linea y sensores de humedad.
+El directo 1. 2. 3. r agradecio a los asistentes y entrego diplomas a los tres primeros lugares de la competencia de programacion competitiva.
+
+El evento termino con una comida en la explanada principal.",Ruido,Nota periodistica sin estructura de propuesta.,Excelente,4,Gestión de Redes y Ciberseguridad
+ANTIGRAVITY_346,"boletin facultad
+
+se llevo a cabo la exposicion anual de proyectos de ingenieria, donde se destacaron maquetas de puentes, robots seguidores de linea y sensores de humedad.
+el director agradecio a los asistentes y entrego diplomas a los tres primeros lugares de la competencia de programacion competitiva.
+
+el evento termino con una comida en la explanada principal.",Ruido,Nota periodistica sin estructura de propuesta.,Excelente,4,Gestión de Redes y Ciberseguridad
+ANTIGRAVITY_347,"BOLETIN FACULTAD
+
+Se llevo a cabo la exposicion anual de proyectos de ingenieria, donde se destacaron maquetas de puentes, robots seguidores de linea y sensores de humedad.
+El directo
+
+ver anexo B
+
+r agradecio a los asistentes y entrego diplomas a los tres primeros lugares de la competencia de programacion competitiva.
+
+El evento termino con una comida en la explanada principal.",Ruido,Nota periodistica sin estructura de propuesta.,Excelente,4,Gestión de Redes y Ciberseguridad
+ANTIGRAVITY_349,"BOLETIN FACULTAD
+
+Se llevo a cabo la exposicion anual de proyectos de ingenieria, donde se destacaron maquetas de puentes, robots seguidores de linea y sensores de humedad.
+El directo (figura 3) r agradecio a los asistentes y entrego diplomas a los tres primeros lugares de la competencia de programacion competitiva.
+
+El evento termino con una comida en la explanada principal.",Ruido,Nota periodistica sin estructura de propuesta.,Excelente,4,Gestión de Redes y Ciberseguridad
+ANTIGRAVITY_350,"PROYECTO DE INGENIERIA
+
+CLASIFICACION AUTOMATIZADA DE PIEZAS CON YOLOV8
+EL OBJETIVO ES DESARROLLAR UN PIPELINE DE VISION COMPUTACIONAL PARA DETECTAR DEFECTOS EN LINEAS DE ENSAMBLAJE. SE PROPONE EL USO DE OPENCV Y YOLO, CON INFERENCIA OPTIMIZADA MEDIANTE ONNX RUNTIME. EL BACKEND ESTARA BASADO EN FASTAPI PARA RECIBIR FRAMES EN TIEMPO REAL, ALMACENANDO LOS METADATOS EN POSTGRESQL.
+
+PARA EL ENTRENAMIENTO SE RECOPILARAN 500 IMAGENES ETIQUETADAS, APLICANDO TECNICAS DE DATA AUGMENTATION. LA EVALUACION SE BASARA EN METRICAS DE MAP50, PRECISION Y RECALL. EL SISTEMA INCLUYE DOCKER PARA SU FACIL DESPLIEGUE EN DISPOSITIVOS DE BORDE.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,6,Analítica y Ciencia de Datos
+ANTIGRAVITY_351,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El obgetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recibir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_352,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib 1. 2. 3. ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_353,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib
+
+ver anexo B
+
+ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_354,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El obgetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib pagina 4 de 10 ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_355,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El obgetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib 1. 2. 3. ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_356,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recibir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_357,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib
+
+ver anexo B
+
+ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_358,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib (figura 3) ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_359,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recibir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_360,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El obgetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recibir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_361,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib pagina 4 de 10 ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_362,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib
+
+ver anexo B
+
+ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_363,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib
+
+Capitulo II
+ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_364,"proyecto de ingenieria
+
+clasificacion automatizada de piezas con yolov8
+el objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. se propone el uso de opencv y yolo, con inferencia optimizada mediante onnx runtime. el backend estara basado en fastapi para recib
+
+capitulo ii
+ir frames en tiempo real, almacenando los metadatos en postgresql.
+
+para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. la evaluacion se basara en metricas de map50, precision y recall. el sistema incluye docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_365,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib 1. 2. 3. ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_366,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recib 1. 2. 3. ir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_367,"PROYECTO DE INGENIERIA
+
+CLASIFICACION AUTOMATIZADA DE PIEZAS CON YOLOV8
+EL OBGETIVO ES DESARROLLAR UN PIPELINE DE VISION COMPUTACIONAL PARA DETECTAR DEFECTOS EN LINEAS DE ENSAMBLAJE. SE PROPONE EL USO DE OPENCV Y YOLO, CON INFERENCIA OPTIMIZADA MEDIANTE ONNX RUNTIME. EL BACKEND ESTARA BASADO EN FASTAPI PARA RECIB
+
+CAPITULO II
+IR FRAMES EN TIEMPO REAL, ALMACENANDO LOS METADATOS EN POSTGRESQL.
+
+PARA EL ENTRENAMIENTO SE RECOPILARAN 500 IMAGENES ETIQUETADAS, APLICANDO TECNICAS DE DATA AUGMENTATION. LA EVALUACION SE BASARA EN METRICAS DE MAP50, PRECISION Y RECALL. EL SISTEMA INCLUYE DOCKER PARA SU FACIL DESPLIEGUE EN DISPOSITIVOS DE BORDE.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,6,Analítica y Ciencia de Datos
+ANTIGRAVITY_368,"proyecto de ingenieria
+
+clasificacion automatizada de piezas con yolov8
+el objetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. se propone el uso de opencv y yolo, con inferencia optimizada mediante onnx runtime. el backend estara basado en fastapi para recib pagina 4 de 10 ir frames en tiempo real, almacenando los metadatos en postgresql.
+
+para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. la evaluacion se basara en metricas de map50, precision y recall. el sistema incluye docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_369,"Proyecto de Ingenieria
+
+Clasificacion automatizada de piezas con YOLOv8
+El obgetivo es desarrollar un pipeline de vision computacional para detectar defectos en lineas de ensamblaje. Se propone el uso de OpenCV y YOLO, con inferencia optimizada mediante ONNX Runtime. El backend estara basado en FastAPI para recibir frames en tiempo real, almacenando los metadatos en PostgreSQL.
+
+Para el entrenamiento se recopilaran 500 imagenes etiquetadas, aplicando tecnicas de data augmentation. La evaluacion se basara en metricas de mAP50, precision y recall. El sistema incluye Docker para su facil despliegue en dispositivos de borde.",Excelente,Proyecto solido de vision con metricas y arquitectura clara.,Excelente,1,Sistemas Web Tradicionales
+ANTIGRAVITY_370,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio  (figura 3) de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_371,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio 
+
+ver anexo B
+
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_372,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_373,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio  pagina 4 de 10 de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_374,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio 
+
+ver anexo B
+
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_375,"proyecto final
+
+sistema de administracion para biblioteca
+se requiere un software para llevar el control de libros, prestamos y devoluciones. el desarrollo se hara usando php nativo, html y css, con una base de datos mysql. el sistema contara con inicio  pagina 4 de 10 de sesion, altas, bajas y modificaciones de los ejemplares.
+
+se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. tambien se generaran reportes en pdf para el encargado. es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_376,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio 
+
+ver anexo B
+
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_377,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_378,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio 
+
+ver anexo B
+
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_379,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio 
+
+Capitulo II
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_380,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_381,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio 
+
+Capitulo II
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_382,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_383,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio  pagina 4 de 10 de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_384,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_394,"BOLETIN FACULTAD
+
+Se llevo a cabo la exposicion anual de proyectos de ingenieria, donde se destacaron maquetas de puentes, robots seguidores de linea y sensores de humedad.
+El directo
+
+ver anexo B
+
+r agradecio a los asistentes y entrego diplomas a los tres primeros lugares de la competencia de programacion competitiva.
+
+El evento termino con una comida en la explanada principal.",Ruido,Nota periodistica sin estructura de propuesta.,Excelente,4,Gestión de Redes y Ciberseguridad
+ANTIGRAVITY_398,"boletin facultad
+
+se llevo a cabo la exposicion anual de proyectos de ingenieria, donde se destacaron maquetas de puentes, robots seguidores de linea y sensores de humedad.
+el directo
+
+capitulo ii
+r agradecio a los asistentes y entrego diplomas a los tres primeros lugares de la competencia de programacion competitiva.
+
+el evento termino con una comida en la explanada principal.",Ruido,Nota periodistica sin estructura de propuesta.,Excelente,4,Gestión de Redes y Ciberseguridad
+ANTIGRAVITY_399,"BOLETIN FACULTAD
+
+Se llevo a cabo la exposicion anual de proyectos de ingenieria, donde se destacaron maquetas de puentes, robots seguidores de linea y sensores de humedad.
+El directo (figura 3) r agradecio a los asistentes y entrego diplomas a los tres primeros lugares de la competencia de programacion competitiva.
+
+El evento termino con una comida en la explanada principal.",Ruido,Nota periodistica sin estructura de propuesta.,Excelente,4,Gestión de Redes y Ciberseguridad
+ANTIGRAVITY_400,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_401,"tesis
+
+buscador semantico institucional con rag local
+la meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de pdfs normativos. se utilizara un modelo transformer ligero (fastembed) y una base de datos vectorial qdrant. pagina 4 de 10  la arquitectura no dependera de apis externas, priorizando privacidad y baja latencia.
+
+la capa web se construira en fastapi y react. el proyecto define metricas de exactitud, faithfulness y latencia p95. ademas, se incluiran pruebas unitarias y despliegue modular con docker compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_402,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. (figura 3)  La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_403,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_404,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant.
+
+Capitulo II
+ La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_405,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant. (figura 3)  La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_406,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant.
+
+Capitulo II
+ La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_407,"TESIS
+
+BUSCADOR SEMANTICO INSTITUCIONAL CON RAG LOCAL
+LA META ES IMPLEMENTAR UN SISTEMA DE RECUPERACION AUMENTADA POR GENERACION PARA RESPONDER DUDAS ESTUDIANTILES A PARTIR DE PDFS NORMATIVOS. SE UTILIZARA UN MODELO TRANSFORMER LIGERO (FASTEMBED) Y UNA BASE DE DATOS VECTORIAL QDRANT. LA ARQUITECTURA NO DEPENDERA DE APIS EXTERNAS, PRIORIZANDO PRIVACIDAD Y BAJA LATENCIA.
+
+LA CAPA WEB SE CONSTRUIRA EN FASTAPI Y REACT. EL PROYECTO DEFINE METRICAS DE EXACTITUD, FAITHFULNESS Y LATENCIA P95. ADEMAS, SE INCLUIRAN PRUEBAS UNITARIAS Y DESPLIEGUE MODULAR CON DOCKER COMPOSE.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,6,Analítica y Ciencia de Datos
+ANTIGRAVITY_408,"TESIS
+
+BUSCADOR SEMANTICO INSTITUCIONAL CON RAG LOCAL
+LA META ES IMPLEMENTAR UN SISTEMA DE RECUPERACION AUMENTADA POR GENERACION PARA RESPONDER DUDAS ESTUDIANTILES A PARTIR DE PDFS NORMATIVOS. SE UTILIZARA UN MODELO TRANSFORMER LIGERO (FASTEMBED) Y UNA BASE DE DATOS VECTORIAL QDRANT.
+
+VER ANEXO B
+
+ LA ARQUITECTURA NO DEPENDERA DE APIS EXTERNAS, PRIORIZANDO PRIVACIDAD Y BAJA LATENCIA.
+
+LA CAPA WEB SE CONSTRUIRA EN FASTAPI Y REACT. EL PROYECTO DEFINE METRICAS DE EXACTITUD, FAITHFULNESS Y LATENCIA P95. ADEMAS, SE INCLUIRAN PRUEBAS UNITARIAS Y DESPLIEGUE MODULAR CON DOCKER COMPOSE.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,6,Analítica y Ciencia de Datos
+ANTIGRAVITY_409,"Tesis
+
+Buscador semantico institucional con RAG local
+La meta es implementar un sistema de recuperacion aumentada por generacion para responder dudas estudiantiles a partir de PDFs normativos. Se utilizara un modelo Transformer ligero (FastEmbed) y una base de datos vectorial Qdrant.
+
+Capitulo II
+ La arquitectura no dependera de APIs externas, priorizando privacidad y baja latencia.
+
+La capa web se construira en FastAPI y React. El proyecto define metricas de exactitud, faithfulness y latencia p95. Ademas, se incluiran pruebas unitarias y despliegue modular con Docker Compose.",Excelente,RAG moderno bien estructurado con MLOps y evaluacion.,Excelente,3,IoT y Sensores MPU
+ANTIGRAVITY_410,"proyecto final
+
+sistema de administracion para biblioteca
+se requiere un software para llevar el control de libros, prestamos y devoluciones. el desarrollo se hara usando php nativo, html y css, con una base de datos mysql. el sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. tambien se generaran reportes en pdf para el encargado. es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_411,"proyecto final
+
+sistema de administracion para biblioteca
+se requiere un software para llevar el control de libros, prestamos y devoluciones. el desarrollo se hara usando php nativo, html y css, con una base de datos mysql. el sistema contara con inicio 
+
+ver anexo b
+
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. tambien se generaran reportes en pdf para el encargado. es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_412,"proyecto final
+
+sistema de administracion para biblioteca
+se requiere un software para llevar el control de libros, prestamos y devoluciones. el desarrollo se hara usando php nativo, html y css, con una base de datos mysql. el sistema contara con inicio 
+
+ver anexo b
+
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. tambien se generaran reportes en pdf para el encargado. es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_413,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_414,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio 
+
+ver anexo B
+
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_415,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio  1. 2. 3. de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_416,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio  pagina 4 de 10 de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_417,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio  1. 2. 3. de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_418,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_419,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_420,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_421,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio 
+
+ver anexo B
+
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_422,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_423,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio  pagina 4 de 10 de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_424,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_425,"proyecto final
+
+sistema de administracion para biblioteca
+se requiere un software para llevar el control de libros, prestamos y devoluciones. el desarrollo se hara usando php nativo, html y css, con una base de datos mysql. el sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. tambien se generaran reportes en pdf para el encargado. es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_426,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio 
+
+Capitulo II
+de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_427,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio  1. 2. 3. de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_428,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio  pagina 4 de 10 de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_429,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_430,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_431,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_432,"PROYECTO FINAL
+
+SISTEMA DE ADMINISTRACION PARA BIBLIOTECA
+SE REQUIERE UN SOFTWARE PARA LLEVAR EL CONTROL DE LIBROS, PRESTAMOS Y DEVOLUCIONES. EL DESARROLLO SE HARA USANDO PHP NATIVO, HTML Y CSS, CON UNA BASE DE DATOS MYSQL. EL SISTEMA CONTARA CON INICIO 
+
+VER ANEXO B
+
+DE SESION, ALTAS, BAJAS Y MODIFICACIONES DE LOS EJEMPLARES.
+
+SE PLANEA HACER PRUEBAS MANUALES COMPROBANDO QUE EL REGISTRO SE GUARDE CORRECTAMENTE. TAMBIEN SE GENERARAN REPORTES EN PDF PARA EL ENCARGADO. ES UNA SOLUCION QUE AUTOMATIZA EL PROCESO DE PAPEL.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_433,"Proyecto final
+
+Sistema de administracion para biblioteca
+Se requiere un software para llevar el control de libros, prestamos y devoluciones. El desarrollo se hara usando PHP nativo, HTML y CSS, con una base de datos MySQL. El sistema contara con inicio de sesion, altas, bajas y modificaciones de los ejemplares.
+
+Se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. Tambien se generaran reportes en PDF para el encargado. Es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_434,"proyecto final
+
+sistema de administracion para biblioteca
+se requiere un software para llevar el control de libros, prestamos y devoluciones. el desarrollo se hara usando php nativo, html y css, con una base de datos mysql. el sistema contara con inicio  (figura 3) de sesion, altas, bajas y modificaciones de los ejemplares.
+
+se planea hacer pruebas manuales comprobando que el registro se guarde correctamente. tambien se generaran reportes en pdf para el encargado. es una solucion que automatiza el proceso de papel.",Regular,Desarrollo tradicional PHP/MySQL funcional pero sin profundidad tecnica.,Regular,2,RAG y Búsqueda Semántica
+ANTIGRAVITY_446,"BOLETIN FACULTAD
+
+Se llevo a cabo la exposicion anual de proyectos de ingenieria, donde se destacaron maquetas de puentes, robots seguidores de linea y sensores de humedad.
+El directo (figura 3) r agradecio a los asistentes y entrego diplomas a los tres primeros lugares de la competencia de programacion competitiva.
+
+El evento termino con una comida en la explanada principal.",Ruido,Nota periodistica sin estructura de propuesta.,Excelente,4,Gestión de Redes y Ciberseguridad
+ANTIGRAVITY_448,"BOLETIN FACULTAD
+
+Se llevo a cabo la exposicion anual de proyectos de ingenieria, donde se destacaron maquetas de puentes, robots seguidores de linea y sensores de humedad.
+El directo
+
+Capitulo II
+r agradecio a los asistentes y entrego diplomas a los tres primeros lugares de la competencia de programacion competitiva.
+
+El evento termino con una comida en la explanada principal.",Ruido,Nota periodistica sin estructura de propuesta.,Excelente,4,Gestión de Redes y Ciberseguridad
+ANTIGRAVITY_449,"BOLETIN FACULTAD
+
+Se llevo a cabo la exposicion anual de proyectos de ingenieria, donde se destacaron maquetas de puentes, robots seguidores de linea y sensores de humedad.
+El directo 1. 2. 3. r agradecio a los asistentes y entrego diplomas a los tres primeros lugares de la competencia de programacion competitiva.
+
+El evento termino con una comida en la explanada principal.",Ruido,Nota periodistica sin estructura de propuesta.,Excelente,4,Gestión de Redes y Ciberseguridad

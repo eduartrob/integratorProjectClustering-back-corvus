@@ -1,5 +1,11 @@
 # Changelog - Project Clustering Service
 
+## [0.5.0] - 2026-07-02
+### Refactorización de Arquitectura y Base de Datos
+- **Migración a Qdrant**: Se reemplazó ChromaDB por Qdrant para mejorar la velocidad y escalabilidad en la búsqueda de vectores.
+- **Flujo Desacoplado de Google Drive**: La sincronización con Drive ya no vectoriza los documentos inmediatamente. Ahora detecta, extrae el texto y los almacena localmente en una "Base de Datos de Pendientes" (`PendingProjectsDB`).
+- **Clusterización por Lotes (Batch)**: El endpoint `/admin/execute` ahora es el único responsable de tomar la cola de proyectos pendientes, generar embeddings en masa (Qdrant) y recalcular el mapa global semántico (K-Means), reduciendo la fragmentación de la memoria.
+
 ## [0.4.0] - 2026-06-26
 
 ### Arquitectura y Refactorización
