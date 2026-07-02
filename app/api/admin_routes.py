@@ -166,6 +166,7 @@ from pydantic import BaseModel
 class ConfigUpdateRequest(BaseModel):
     allowed_extensions: list[str]
     llm_provider: str = "ollama"
+    drive_folder_id: str = ""
 
 @router.get("/config")
 async def get_system_config():
@@ -177,7 +178,8 @@ async def update_system_config(request: ConfigUpdateRequest):
     
     new_config = {
         "allowed_extensions": request.allowed_extensions,
-        "llm_provider": request.llm_provider
+        "llm_provider": request.llm_provider,
+        "drive_folder_id": request.drive_folder_id
     }
     success = config_manager.save_config(new_config)
     if success:
