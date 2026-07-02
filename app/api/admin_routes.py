@@ -52,26 +52,26 @@ async def get_clusters_stats():
 @router.get("/projects-count", tags=["Admin Panel"])
 async def get_projects_count():
     
-    from app.services.chroma_service import chroma_service
+    from app.services.qdrant_service import qdrant_service
     try:
-        results = chroma_service.collection.get(include=["metadatas"])
-        if not results or not results['metadatas']:
+        _, payloads = qdrant_service.get_all_embeddings()
+        if not payloads:
             return {"count": 0}
             
-        unique_projects = set(meta['project_id'] for meta in results['metadatas'] if 'project_id' in meta)
+        unique_projects = set(meta['project_id'] for meta in payloads if 'project_id' in meta)
         return {"count": len(unique_projects)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/pending-projects-count", tags=["Admin Panel"])
 async def get_pending_projects_count():
-    from app.services.chroma_service import chroma_service
+    from app.services.qdrant_service import qdrant_service
     from app.services.pending_projects_db import pending_projects_db
     try:
-        results = chroma_service.collection.get(include=["metadatas"])
+        _, payloads = qdrant_service.get_all_embeddings()
         vectorized_count = 0
-        if results and results['metadatas']:
-            vectorized_count = len(set(meta['project_id'] for meta in results['metadatas'] if 'project_id' in meta))
+        if payloads:
+            vectorized_count = len(set(meta['project_id'] for meta in payloads if 'project_id' in meta))
 
         pending_count = pending_projects_db.get_pending_count()
         total_detected = vectorized_count + pending_count
@@ -91,22 +91,21 @@ async def get_pending_projects_count():
 
 @router.post("/reset-data", tags=["Admin Panel"])
 async def reset_all_data():
-    """Borra TODOS los vectores de ChromaDB para empezar desde cero.
+    """Borra TODOS los vectores de Qdrant para empezar desde cero.
     Úsalo antes de volver a sincronizar la carpeta de Drive."""
-    from app.services.chroma_service import chroma_service
-    import chromadb
+    from app.services.qdrant_service import qdrant_service
+    from qdrant_client.models import VectorParams, Distance
     try:
-        client = chroma_service.client
+        client = qdrant_service.client
         collection_name = "integrator_projects"
-        # Delete and recreate the collection
-        client.delete_collection(name=collection_name)
-        chroma_service.collection = client.get_or_create_collection(
-            name=collection_name,
-            metadata={"hnsw:space": "cosine"}
+        client.delete_collection(collection_name=collection_name)
+        client.create_collection(
+            collection_name=collection_name,
+            vectors_config=VectorParams(size=384, distance=Distance.COSINE),
         )
         return {
             "status": "ok",
-            "message": "✅ ChromaDB limpiado exitosamente. Ahora sincroniza la carpeta de Drive para cargar los nuevos proyectos."
+            "message": "✅ Qdrant limpiado exitosamente. Ahora sincroniza la carpeta de Drive para cargar los nuevos proyectos."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -115,7 +114,7 @@ async def reset_all_data():
 async def execute_clustering(background_tasks: BackgroundTasks):
     from app.services.clustering_service import clustering_engine
     from app.services.pending_projects_db import pending_projects_db
-    from app.services.chroma_service import chroma_service
+    from app.services.qdrant_service import qdrant_service
     from app.services.nlp_service import nlp_service
 
     def run_clustering():
@@ -131,11 +130,13 @@ async def execute_clustering(background_tasks: BackgroundTasks):
                         chunks = nlp_service.chunk_text(safe_text)
                         embeddings = nlp_service.vectorize(chunks)
                         if embeddings:
-                            chroma_service.add_vectors(
-                                project_id=p["id"],
-                                texts=chunks,
-                                embeddings=embeddings,
-                                url_drive=p["source_url"]
+                            qdrant_service.add_embeddings(
+                                vectors=embeddings,
+                                payloads=[{
+                                    "project_id": p["id"],
+                                    "text": chunk,
+                                    "source_url": p["source_url"]
+                                } for chunk in chunks]
                             )
                     # Quitar de pendientes y borrar el txt temporal
                     pending_projects_db.pop_pending_project(p["id"])
@@ -190,7 +191,7 @@ async def update_system_config(request: ConfigUpdateRequest):
 async def get_recent_projects(limit: int = 50):
     
     from app.services.visualization_service import visualization_service
-    from app.services.chroma_service import chroma_service
+    from app.services.qdrant_service import qdrant_service
     from app.services.pending_projects_db import pending_projects_db
     try:
         projects_list = []
@@ -208,12 +209,12 @@ async def get_recent_projects(limit: int = 50):
             })
             
         # 2. Agregar clusterizados/vectorizados
-        results = chroma_service.collection.get(include=["metadatas"])
+        _, payloads = qdrant_service.get_all_embeddings()
         cluster_names = visualization_service.get_cluster_names()
         
         unique_projects = {}
-        if results and results['metadatas']:
-            for meta in results['metadatas']:
+        if payloads:
+            for meta in payloads:
                 p_id = meta.get('project_id')
                 if p_id and p_id not in unique_projects:
                     name = p_id.replace('proyecto_', '').replace('_', ' ').title()

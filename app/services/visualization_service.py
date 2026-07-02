@@ -3,7 +3,7 @@ import joblib
 import umap
 import plotly.graph_objects as go
 from collections import Counter
-from app.services.chroma_service import chroma_service
+from app.services.qdrant_service import qdrant_service
 from app.core.config import settings
 import os
 
@@ -17,12 +17,12 @@ class VisualizationService:
 
     def _get_data_from_db(self):
         
-        results = chroma_service.collection.get(include=["embeddings", "metadatas"])
-        if not results or results.get('embeddings') is None or len(results['embeddings']) == 0:
+        vectors, payloads = qdrant_service.get_all_embeddings()
+        if not vectors or len(vectors) == 0:
             return None, None, None, None
 
         projects_data = {}
-        for i, meta in enumerate(results['metadatas']):
+        for i, meta in enumerate(payloads):
             p_id = meta.get('project_id')
             if not p_id:
                 continue
@@ -32,7 +32,7 @@ class VisualizationService:
                     'cluster_id': meta.get('cluster_id', 0),
                     'is_blue_ocean': meta.get('is_blue_ocean', False)
                 }
-            projects_data[p_id]['embeddings'].append(results['embeddings'][i])
+            projects_data[p_id]['embeddings'].append(vectors[i])
 
         unique_ids = sorted(projects_data.keys())
         aggregated_embeddings = [np.mean(projects_data[p]['embeddings'], axis=0) for p in unique_ids]

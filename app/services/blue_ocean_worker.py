@@ -28,7 +28,7 @@ class BlueOceanWorker:
             logger.info("Blue Ocean Worker stopped.")
 
     async def _worker_loop(self):
-        from app.services.chroma_service import chroma_service
+        from app.services.qdrant_service import qdrant_service
         
         while self._is_running:
             try:
@@ -36,9 +36,9 @@ class BlueOceanWorker:
                 
                 if not pending:
                     try:
-                        results = chroma_service.collection.get(include=["metadatas"])
-                        if results and results.get('metadatas'):
-                            for meta in results['metadatas']:
+                        vectors, payloads = qdrant_service.get_all_embeddings()
+                        if payloads:
+                            for meta in payloads:
                                 if meta and meta.get('is_blue_ocean'):
                                     p_id = meta.get('project_id')
                                     if p_id:

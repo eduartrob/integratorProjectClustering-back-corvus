@@ -156,10 +156,8 @@ async def get_sync_status(folder_id: str):
 async def check_blue_ocean(project_id: str):
     
     try:
-        all_data = chroma_service.get_all_embeddings()
-        embeddings = all_data.get("embeddings")
-        metadatas = all_data.get("metadatas")
-        documents = all_data.get("documents")
+        embeddings, metadatas = qdrant_service.get_all_embeddings()
+        documents = [meta.get("text", "") for meta in metadatas] if metadatas else []
 
         if embeddings is None or len(embeddings) == 0:
             raise HTTPException(status_code=404, detail="No hay historial de proyectos para comparar.")
@@ -210,18 +208,18 @@ async def check_blue_ocean(project_id: str):
 @router.get("/blue-ocean-niches")
 async def get_blue_ocean_niches():
     
-    from app.services.chroma_service import chroma_service
+    from app.services.qdrant_service import qdrant_service
     from app.services.blue_ocean_db import blue_ocean_db
     import time
 
     
     niches = []
     try:
-        results = chroma_service.collection.get(include=["metadatas"])
+        vectors, payloads = qdrant_service.get_all_embeddings()
         
         unique_projects = {}
-        if results and results.get('metadatas'):
-            for meta in results['metadatas']:
+        if payloads:
+            for meta in payloads:
                 if meta and meta.get('is_blue_ocean'):
                     p_id = meta.get('project_id')
                     if p_id and p_id not in unique_projects:
@@ -341,11 +339,13 @@ async def populate_from_local_folder(x_api_key: str = Header(default=None)):
                 results.append({"file": filename, "status": "error", "message": "Fallo vectorización"})
                 continue
                 
-            chroma_service.add_vectors(
-                project_id=project_id,
-                texts=chunks,
-                embeddings=embeddings,
-                url_drive=f"local://projectsTests/{filename}"
+            qdrant_service.add_embeddings(
+                vectors=embeddings,
+                payloads=[{
+                    "project_id": project_id,
+                    "text": chunk,
+                    "source_url": f"local://projectsTests/{filename}"
+                } for chunk in chunks]
             )
             
             results.append({"file": filename, "status": "success", "chunks": len(chunks)})
@@ -795,7 +795,7 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
         
         query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
         
-        search_results = chroma_service.search_similar_multi(query_embeddings=query_subset, n_results=3)
+        search_results = qdrant_service.search_similar_multi(query_embeddings=query_subset, n_results=3)
         
         similar_projects = []
         if search_results and "documents" in search_results and search_results["documents"]:
