@@ -2,9 +2,10 @@ import io
 import logging
 import fitz
 import pymupdf4llm
-from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+import os
 from app.core.config import settings
 from app.core.config_manager import config_manager
 
@@ -13,10 +14,16 @@ logger = logging.getLogger(__name__)
 class DriveService:
     def __init__(self):
         self.scopes = ['https://www.googleapis.com/auth/drive.readonly']
+        self.credentials_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'google_service_account.json')
         
-    def get_drive_service(self, access_token: str):
-        
-        creds = Credentials(token=access_token)
+    def get_drive_service(self, access_token: str = None):
+        if not os.path.exists(self.credentials_path):
+            logger.error(f"Falta el archivo de credenciales de Google Drive en: {self.credentials_path}")
+            raise Exception("Archivo google_service_account.json no encontrado.")
+            
+        creds = service_account.Credentials.from_service_account_file(
+            self.credentials_path, scopes=self.scopes
+        )
         return build('drive', 'v3', credentials=creds)
 
     def download_pdf_to_memory(self, file_id: str, access_token: str) -> io.BytesIO:

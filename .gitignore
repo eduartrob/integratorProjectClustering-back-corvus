@@ -119,3 +119,4 @@ chroma_data/
 
 # Machine Learning Models (Optional)
 # app/models/
+google_service_account.json
