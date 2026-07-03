@@ -37,7 +37,12 @@ class VisualizationService:
 
         unique_ids = sorted(projects_data.keys())
         aggregated_embeddings = [np.mean(projects_data[p]['embeddings'], axis=0) for p in unique_ids]
-        labels = [projects_data[p]['cluster_id'] for p in unique_ids]
+        labels = []
+        for p in unique_ids:
+            if projects_data[p].get('is_blue_ocean', False):
+                labels.append(-1)
+            else:
+                labels.append(projects_data[p]['cluster_id'])
         
         return unique_ids, np.array(aggregated_embeddings), labels, projects_data
 
@@ -295,7 +300,7 @@ class VisualizationService:
                 hovertext=hover_oa, hoverinfo='text'))
 
         fig.update_layout(
-            title=dict(text="<b>Mapa Semántico 2D — Clústeres HDBSCAN</b>",
+            title=dict(text="<b>Mapa Semántico 2D — K-Means + Isolation Forest</b>",
                        x=0.5, font=dict(size=16, color='#1a1a2e')),
             xaxis=dict(title='UMAP Dim 1', gridcolor='#e8edf5', zerolinecolor='#d0d7e3',
                        tickfont=dict(color='#444')),
