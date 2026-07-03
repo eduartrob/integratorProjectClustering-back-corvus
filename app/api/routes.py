@@ -862,7 +862,7 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/admin/minimap-data")
-def minimap_data(api_key: str = Depends(get_api_key)):
+def minimap_data():
     """
     Retorna los centroides de los clústeres para animar la ubicación
     de una inferencia en el historial de manera ligera en el Frontend.
