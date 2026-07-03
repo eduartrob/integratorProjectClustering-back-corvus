@@ -471,13 +471,14 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
                         "similarity_pct": similitud_pct
                     })
 
-        # ── Asignar clúster con K-Means (métrica de innovación) ────────────
         resultado_cluster = {"cluster_id": -1, "cluster_total": 0,
                              "innovacion_pct": 50.0, "posicion_pct": 50.0,
                              "proyectos_cercanos": []}
-        if vector_nuevo:
+        if embeddings and len(embeddings) > 0:
+            import numpy as np
+            vector_qdrant = np.mean(embeddings, axis=0).tolist()
             try:
-                resultado_cluster = clustering_engine.asignar_cluster(vector_nuevo)
+                resultado_cluster = clustering_engine.asignar_cluster(vector_qdrant)
             except Exception as ce:
                 print(f"[WARN] K-Means no disponible: {ce}")
 
