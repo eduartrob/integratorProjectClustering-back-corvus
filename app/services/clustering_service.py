@@ -10,6 +10,7 @@ import pandas as pd
 from pathlib import Path
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score
 
 logger = logging.getLogger(__name__)
 
