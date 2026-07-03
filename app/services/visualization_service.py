@@ -30,7 +30,8 @@ class VisualizationService:
                 projects_data[p_id] = {
                     'embeddings': [],
                     'cluster_id': meta.get('cluster_id', 0),
-                    'is_blue_ocean': meta.get('is_blue_ocean', False)
+                    'is_blue_ocean': meta.get('is_blue_ocean', False),
+                    'cluster_name': meta.get('cluster_name', '')
                 }
             projects_data[p_id]['embeddings'].append(vectors[i])
 
@@ -42,28 +43,29 @@ class VisualizationService:
 
     def get_cluster_names(self):
         
-        unique_ids, _, labels, _ = self._get_data_from_db()
+        unique_ids, _, labels, projects_data = self._get_data_from_db()
         if not unique_ids:
             return {}
 
         cluster_counts = Counter(labels)
-        stopwords = {'de', 'la', 'el', 'en', 'y', 'para', 'con', 'los', 'las', 'un', 'una', 'del', 'al', 'proyecto', 'md', 'pdf'}
-        
         cluster_names = {}
+        
         for cid in cluster_counts.keys():
             if cid == -1:
                 cluster_names[cid] = "Océano Azul"
                 continue
             
-            p_ids = [unique_ids[i] for i in range(len(unique_ids)) if labels[i] == cid]
-            words = []
-            for pid in p_ids:
-                clean_pid = pid.lower().replace('.md', '').replace('.pdf', '').replace('_', ' ').replace('-', ' ')
-                words.extend([w for w in clean_pid.split() if w not in stopwords and len(w) > 2])
+            # Find the first project in this cluster and use its stored cluster_name
+            stored_name = None
+            for p_id in unique_ids:
+                if projects_data[p_id]['cluster_id'] == cid:
+                    name = projects_data[p_id].get('cluster_name')
+                    if name:
+                        stored_name = name
+                        break
             
-            if words:
-                common_words = [w[0].title() for w in Counter(words).most_common(2)]
-                cluster_names[cid] = " / ".join(common_words)
+            if stored_name:
+                cluster_names[cid] = stored_name
             else:
                 cluster_names[cid] = f"Clúster {cid}"
                 
