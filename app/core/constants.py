@@ -20,14 +20,14 @@ SECCIONES_PROFESOR = [
             "descripción del proyecto", "descripcion del proyecto",
             "información del equipo", "informacion del equipo",
         ],
-        "obligatoria": True,
+        "obligatoria": False,
     },
     {
         "nombre": "Problemática",
         "keywords": [
             "problemática", "problematica", "planteamiento del problema",
             "planteamiento", "contexto de la problemática",
-            "contexto de la problematica", "contexto",
+            "contexto de la problematica", "contexto", "problema a resolver",
         ],
         "obligatoria": True,
     },
@@ -36,9 +36,9 @@ SECCIONES_PROFESOR = [
         "keywords": [
             "objetivo general", "objetivos general",
             "objetivos de optimización", "objetivos de optimizacion",
-            "objetivo",
+            "objetivo", "resultados esperados",
         ],
-        "obligatoria": True,
+        "obligatoria": False,
     },
     {
         "nombre": "Objetivos Específicos / Variables",
@@ -47,9 +47,9 @@ SECCIONES_PROFESOR = [
             "específicos", "especificos",
             "variables de decisión", "variables de decision",
             "variables a optimizar", "entradas al sistema", "entradas",
-            "salidas esperadas", "salidas del sistema",
+            "salidas esperadas", "salidas del sistema", "metodología", "metodologia"
         ],
-        "obligatoria": True,
+        "obligatoria": False,
     },
     {
         "nombre": "Justificación",
