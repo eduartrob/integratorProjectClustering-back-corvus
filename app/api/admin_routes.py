@@ -117,7 +117,7 @@ async def execute_clustering(background_tasks: BackgroundTasks):
     from app.services.qdrant_service import qdrant_service
     from app.services.nlp_service import nlp_service
 
-    def run_clustering():
+    async def run_clustering():
         try:
             pending = pending_projects_db.get_all_pending()
             print(f"Vectorizando {len(pending)} proyectos pendientes antes de clusterizar...", flush=True)
@@ -179,7 +179,7 @@ async def execute_clustering(background_tasks: BackgroundTasks):
                     print(f"Error vectorizando pendiente {p['id']}: {ex}")
             
             print("Ejecutando clustering global...", flush=True)
-            success = clustering_engine.execute_global_clustering()
+            success = await clustering_engine.execute_global_clustering()
             if success:
                 print("Clustering global ejecutado exitosamente.")
             else:
