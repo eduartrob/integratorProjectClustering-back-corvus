@@ -130,12 +130,22 @@ async def execute_clustering(background_tasks: BackgroundTasks):
                         chunks = nlp_service.chunk_text(safe_text)
                         embeddings = nlp_service.vectorize(chunks)
                         if embeddings:
+                            import numpy as np
+                            doc_embedding = np.mean(embeddings, axis=0).tolist()
+                            cluster_info = clustering_engine.asignar_cluster(doc_embedding)
+                            
+                            c_id = cluster_info.get("cluster_id", 0)
+                            # Consideramos océano azul si está lejos del centroide (posición > 80%)
+                            is_blue_ocean = cluster_info.get("posicion_pct", 0) > 80.0
+
                             qdrant_service.add_embeddings(
                                 vectors=embeddings,
                                 payloads=[{
                                     "project_id": p["id"],
                                     "text": chunk,
-                                    "source_url": p["source_url"]
+                                    "source_url": p["source_url"],
+                                    "cluster_id": c_id,
+                                    "is_blue_ocean": is_blue_ocean
                                 } for chunk in chunks]
                             )
                     # Quitar de pendientes y borrar el txt temporal
