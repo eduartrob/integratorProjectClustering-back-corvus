@@ -39,6 +39,7 @@ class ClusteringEngineService:
         self._pca         = None   # PCA 2D para visualización
         self._embeddings_2d = None
         self.is_running   = False
+        self.last_error   = None
 
     # ── Carga lazy del modelo de embeddings ──────────────────────────────────
 
@@ -181,6 +182,7 @@ class ClusteringEngineService:
             return False
             
         self.is_running = True
+        self.last_error = None
         try:
             logger.info("[Clustering] Iniciando Clustering Global...")
             
@@ -298,6 +300,7 @@ class ClusteringEngineService:
             logger.error(f"[Clustering] Error crítico durante clustering global: {e}")
             import traceback
             traceback.print_exc()
+            self.last_error = str(e)
             return False
         finally:
             self.is_running = False

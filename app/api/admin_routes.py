@@ -47,6 +47,7 @@ async def get_clusters_stats():
         if "error" in stats:
             raise HTTPException(status_code=500, detail=stats["error"])
         stats["is_clustering_running"] = clustering_engine.is_running
+        stats["last_error"] = clustering_engine.last_error
         return stats
     except Exception as e:
         import traceback

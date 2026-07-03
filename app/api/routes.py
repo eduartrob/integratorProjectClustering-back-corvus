@@ -543,6 +543,7 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
                 nivel_riesgo=collision_risk_level,
                 academic_alignment=min(100, quick_analysis["academic_alignment"]),
                 secciones_opcionales=section_check.get("found_optional", []),
+                cluster_id=cluster_id,
             )
         except Exception as log_err:
             print(f"[WARN] No se pudo guardar en inference_log: {log_err}")
@@ -858,4 +859,17 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
     except Exception as e:
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/admin/minimap-data")
+def minimap_data(api_key: str = Depends(get_api_key)):
+    """
+    Retorna los centroides de los clústeres para animar la ubicación
+    de una inferencia en el historial de manera ligera en el Frontend.
+    """
+    try:
+        from app.services.visualization_service import visualization_service
+        data = visualization_service.get_minimap_data()
+        return data
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

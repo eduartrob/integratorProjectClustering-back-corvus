@@ -344,6 +344,44 @@ class VisualizationService:
         return fig.to_html(include_plotlyjs='cdn', full_html=True)
 
 
+    def get_minimap_data(self):
+        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
+        if not unique_ids:
+            return {"clusters": []}
+
+        try:
+            n_neighbors = min(12, len(embeddings_384d) - 1)
+            if n_neighbors < 2:
+                n_neighbors = 2
+            import umap
+            reducer_2d = umap.UMAP(n_components=2, n_neighbors=n_neighbors, min_dist=0.05, metric='cosine', random_state=42)
+            embeddings_2d = reducer_2d.fit_transform(embeddings_384d)
+        except Exception as e:
+            return {"clusters": []}
+
+        cluster_names = self.get_cluster_names()
+        unique_labels = sorted(set(labels))
+        cluster_labels_valid = [l for l in unique_labels if l != -1]
+
+        minimap_clusters = []
+        for cluster_id in cluster_labels_valid:
+            indices = [i for i, l in enumerate(labels) if l == cluster_id]
+            if not indices:
+                continue
+            pts = embeddings_2d[indices]
+            color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
+            cx, cy = float(pts[:, 0].mean()), float(pts[:, 1].mean())
+            name = cluster_names.get(cluster_id, f"Cluster {cluster_id}")
+            minimap_clusters.append({
+                "id": cluster_id,
+                "name": name,
+                "x": cx,
+                "y": cy,
+                "color": color,
+                "size": len(indices)
+            })
+
+        return {"clusters": minimap_clusters}
 
 
 visualization_service = VisualizationService()
