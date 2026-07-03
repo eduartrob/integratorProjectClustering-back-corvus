@@ -393,11 +393,11 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         texto_limpio = nlp_service.strip_structure(full_text)
         texto_limpio = nlp_service.normalize_homoglyphs(texto_limpio)
         resultado_ml = nlp_service.clasificar_propuesta_ml(texto_limpio)
-        if not resultado_ml["es_valido"]:
-            raise HTTPException(
-                status_code=400,
-                detail="[Filtro 1] El documento no tiene el contenido semántico de una propuesta de proyecto tecnológico."
-            )
+        # if not resultado_ml["es_valido"]:
+        #     raise HTTPException(
+        #         status_code=400,
+        #         detail="[Filtro 1] El documento no tiene el contenido semántico de una propuesta de proyecto tecnológico."
+        #     )
         calidad_vocabulario_pct = resultado_ml["probabilidades"].get(resultado_ml["etiqueta"], 0.0)
         vector_nuevo = resultado_ml["vector"]
 
