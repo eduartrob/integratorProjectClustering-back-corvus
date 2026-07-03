@@ -68,4 +68,40 @@ class LlmClient:
                 "verdict": "Error de conexión con el servicio de IA",
             }
 
+    async def generate_cluster_name(self, sample_texts: list) -> str:
+        try:
+            from app.core.config_manager import config_manager
+            current_config = config_manager.get_config()
+            llm_provider = current_config.get("llm_provider", "ollama")
+
+            prompt = (
+                "Eres un experto en taxonomía de proyectos de software. "
+                "Analiza estos fragmentos de proyectos de software y devuelve ÚNICAMENTE "
+                "un nombre de máximo 4 palabras que describa su temática principal en común. "
+                "No uses comillas, no des explicaciones. Solo el nombre.\n\n"
+            )
+            for i, text in enumerate(sample_texts):
+                prompt += f"Proyecto {i+1}: {text[:500]}...\n\n"
+
+            # Assuming llm-service has an endpoint for raw prompt/chat or we can use the provider directly
+            # Wait, the llm-service may only have analyze-proposal.
+            # I will check if there is a raw prompt endpoint. If not, I can just use ollama_service directly if local.
+            # But wait, we can just send it to analyze-proposal? No, that's a specific schema.
+            # Let's create an endpoint in llm-service if it doesn't exist, OR check if we have a direct ollama client.
+            logger.info(f"[LlmClient] Generando nombre de cluster con {llm_provider}")
+            
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{settings.LLM_SERVICE_URL}/api/v1/llm/generate-name",
+                    json={"prompt": prompt, "provider": llm_provider}
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get("name", "Tema Tecnológico").strip('"\' ')
+                
+            return "Tema Tecnológico"
+        except Exception as e:
+            logger.error(f"[LlmClient] Error al generar nombre de cluster: {e}")
+            return "Tema Tecnológico"
+
 llm_client = LlmClient()

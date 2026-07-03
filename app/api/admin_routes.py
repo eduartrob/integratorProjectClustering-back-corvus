@@ -126,26 +126,48 @@ async def execute_clustering(background_tasks: BackgroundTasks):
                     raw_text = pending_projects_db.read_project_text(p["text_file"])
                     if raw_text:
                         clean_text = nlp_service.strip_structure(raw_text)
+                        
+                        # FASE 1: Filtros de Seguridad (Orden Corregido)
+                        
+                        # 1. Filtro ML (Regresión Logística)
+                        ml_result = nlp_service.clasificar_propuesta_ml(clean_text)
+                        if not ml_result.get("es_valido", False):
+                            print(f"Proyecto {p['id']} rechazado por Clasificador ML: {ml_result.get('etiqueta')}")
+                            pending_projects_db.pop_pending_project(p["id"])
+                            continue
+                            
+                        # 2. Filtro Blacklist
+                        bl_result = nlp_service.validar_blacklist_extendida(raw_text)
+                        if not bl_result.get("ok", False):
+                            print(f"Proyecto {p['id']} rechazado por Blacklist: {bl_result.get('palabra_bloqueada')}")
+                            pending_projects_db.pop_pending_project(p["id"])
+                            continue
+                            
+                        # 3. Filtro de Secciones
+                        sec_result = nlp_service.validar_secciones_profesor(raw_text)
+                        if not sec_result.get("ok", False):
+                            print(f"Proyecto {p['id']} rechazado por Secciones faltantes: {sec_result.get('faltantes')}")
+                            pending_projects_db.pop_pending_project(p["id"])
+                            continue
+                            
+                        # 4. Filtro de Coherencia
+                        coh_result = nlp_service.validar_coherencia_semantica(raw_text)
+                        if not coh_result.get("ok", False):
+                            print(f"Proyecto {p['id']} rechazado por Coherencia Semántica")
+                            pending_projects_db.pop_pending_project(p["id"])
+                            continue
+
+                        # Aprobado: Vectorizar e insertar en Qdrant (sin cluster_id aún, se recalcula globalmente luego)
                         safe_text = nlp_service.anonymize_pii(clean_text)
                         chunks = nlp_service.chunk_text(safe_text)
                         embeddings = nlp_service.vectorize(chunks)
                         if embeddings:
-                            import numpy as np
-                            doc_embedding = np.mean(embeddings, axis=0).tolist()
-                            cluster_info = clustering_engine.asignar_cluster(doc_embedding)
-                            
-                            c_id = cluster_info.get("cluster_id", 0)
-                            # Consideramos océano azul si está lejos del centroide (posición > 80%)
-                            is_blue_ocean = cluster_info.get("posicion_pct", 0) > 80.0
-
                             qdrant_service.add_embeddings(
                                 vectors=embeddings,
                                 payloads=[{
                                     "project_id": p["id"],
                                     "text": chunk,
-                                    "source_url": p["source_url"],
-                                    "cluster_id": c_id,
-                                    "is_blue_ocean": is_blue_ocean
+                                    "source_url": p["source_url"]
                                 } for chunk in chunks]
                             )
                     # Quitar de pendientes y borrar el txt temporal

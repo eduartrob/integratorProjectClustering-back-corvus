@@ -198,6 +198,23 @@ class QdrantService:
         logger.info(f"[QdrantService] Proyecto '{project_id}' eliminado.")
         return True
 
+    def update_project_payload(self, project_id: str, payload_data: dict) -> bool:
+        """Actualiza el payload de todos los vectores (chunks) que pertenezcan a este proyecto."""
+        from qdrant_client.http.models import FilterSelector, Filter, FieldCondition, MatchValue
+        self.client.set_payload(
+            collection_name=_COLLECTION_NAME,
+            payload=payload_data,
+            points=FilterSelector(
+                filter=Filter(
+                    must=[FieldCondition(
+                        key="project_id",
+                        match=MatchValue(value=project_id)
+                    )]
+                )
+            ),
+        )
+        return True
+
 
 # Instancia global — mismo patrón que chroma_service.py
 qdrant_service = QdrantService()
