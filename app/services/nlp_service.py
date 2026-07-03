@@ -80,6 +80,10 @@ class NLPService:
         Retorna: {ok, faltantes, encontradas, completitud_pct}
         """
         t = texto_crudo.lower()
+        # Limpiar tags HTML y formato Markdown que rompen la búsqueda de palabras clave
+        t = re.sub(r'<br\s*/?>', ' ', t)
+        t = re.sub(r'[*#_|]', ' ', t)
+        t = re.sub(r'\s+', ' ', t)
         faltantes, encontradas = [], []
         obligatorias_total = sum(1 for s in constants.SECCIONES_PROFESOR if s["obligatoria"])
 
