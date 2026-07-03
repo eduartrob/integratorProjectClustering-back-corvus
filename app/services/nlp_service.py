@@ -233,6 +233,10 @@ class NLPService:
 
         text = re.sub(r'^[-=]{3,}$', '', text, flags=re.MULTILINE)
 
+        # Remover formato de tablas Markdown generado por pymupdf4llm
+        text = re.sub(r'\|\s*[-:]+\s*\|(\s*[-:]+\s*\|)*', '\n', text)
+        text = re.sub(r'\|', ' ', text)
+
         text = re.sub(r'^.*[Mm]atrícula:.*\d+.*$', '', text, flags=re.MULTILINE)
 
         text = re.sub(r'\n{3,}', '\n\n', text)
