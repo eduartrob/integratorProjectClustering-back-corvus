@@ -141,7 +141,7 @@ class VisualizationService:
         return scatter_data
 
     def generate_3d_html(self, filter_cluster_id: str = None):
-        unique_ids, embeddings_384d, labels, _ = self._get_data_from_db()
+        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
         if not unique_ids:
             return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
@@ -154,6 +154,7 @@ class VisualizationService:
         except Exception as e:
             return f"<html><body><h1>Error de proyeccion</h1><p>{str(e)}</p></body></html>"
 
+        cluster_names = self.get_cluster_names()
         fig = go.Figure()
         unique_labels = sorted(set(labels))
         cluster_labels_valid = [l for l in unique_labels if l != -1]
@@ -172,24 +173,28 @@ class VisualizationService:
             x, y, z = embeddings_3d[indices, 0], embeddings_3d[indices, 1], embeddings_3d[indices, 2]
 
             hover_texts = [
-                f"<b>{unique_ids[i].replace('_', ' ').title()}</b><br>Cluster: {cluster_id}"
+                f"<b>{unique_ids[i].replace('_', ' ').title()}</b><br>Cluster: {cluster_names.get(cluster_id, f'Clúster {cluster_id}')}"
                 for i in indices
             ]
             color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
 
             fig.add_trace(go.Scatter3d(
                 x=x, y=y, z=z, mode='markers+text',
-                name=f'Cluster {cluster_id} ({len(indices)} proy.)',
+                name=f'{cluster_names.get(cluster_id, f"Clúster {cluster_id}")} ({len(indices)} proy.)',
                 marker=dict(size=10, color=color, opacity=0.9, line=dict(color='white', width=1.5), symbol='circle'),
                 text=[str(i+1) for i in indices], textposition='top center',
                 textfont=dict(size=9, color='white'),
                 hovertext=hover_texts, hoverinfo='text',
             ))
 
-        blue_ocean_indices = [i for i, l in enumerate(labels) if l == -1]
-        if filter_cluster_id is not None and filter_cluster_id != "global" and filter_cluster_id != "blue_oceans":
-            blue_ocean_indices = []
-            
+        blue_ocean_indices = []
+        if projects_data:
+            for i, p in enumerate(unique_ids):
+                if projects_data[p].get('is_blue_ocean', False):
+                    if filter_cluster_id is None or filter_cluster_id in ["global", "blue_oceans"]:
+                        blue_ocean_indices.append(i)
+                    elif str(projects_data[p].get('cluster_id')) == str(filter_cluster_id):
+                        blue_ocean_indices.append(i)
         if blue_ocean_indices:
             x_oa, y_oa, z_oa = embeddings_3d[blue_ocean_indices, 0], embeddings_3d[blue_ocean_indices, 1], embeddings_3d[blue_ocean_indices, 2]
             hover_oa = [f"<b>🌊 OCEANO AZUL</b><br><b>{unique_ids[i].replace('_', ' ').title()}</b>" for i in blue_ocean_indices]
@@ -222,7 +227,7 @@ class VisualizationService:
         return fig.to_html(include_plotlyjs='cdn', full_html=True)
 
     def generate_2d_html(self, filter_cluster_id: str = None):
-        unique_ids, embeddings_384d, labels, _ = self._get_data_from_db()
+        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
         if not unique_ids:
             return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
@@ -248,6 +253,7 @@ class VisualizationService:
                 [cy + sy * math.sin(2 * math.pi * i / n) for i in range(n + 1)]
             )
 
+        cluster_names = self.get_cluster_names()
         fig = go.Figure()
         unique_labels = sorted(set(labels))
         cluster_labels_valid = [l for l in unique_labels if l != -1]
@@ -290,20 +296,24 @@ class VisualizationService:
             x, y = embeddings_2d[indices, 0], embeddings_2d[indices, 1]
             color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
             hover_texts = [
-                f"<b>{unique_ids[i].replace('_', ' ').title()}</b><br>Clúster: {cluster_id}"
+                f"<b>{unique_ids[i].replace('_', ' ').title()}</b><br>Clúster: {cluster_names.get(cluster_id, f'Clúster {cluster_id}')}"
                 for i in indices
             ]
             fig.add_trace(go.Scatter(x=x, y=y, mode='markers',
-                name=f'Clúster {cluster_id} ({len(indices)} proy.)',
+                name=f'{cluster_names.get(cluster_id, f"Clúster {cluster_id}")} ({len(indices)} proy.)',
                 marker=dict(size=12, color=color, opacity=0.92,
                             line=dict(color='white', width=1.2)),
                 hovertext=hover_texts, hoverinfo='text'))
 
         # Blue Oceans as red stars
-        blue_ocean_indices = [i for i, l in enumerate(labels) if l == -1]
-        if filter_cluster_id is not None and filter_cluster_id != "global" and filter_cluster_id != "blue_oceans":
-            blue_ocean_indices = []
-            
+        blue_ocean_indices = []
+        if projects_data:
+            for i, p in enumerate(unique_ids):
+                if projects_data[p].get('is_blue_ocean', False):
+                    if filter_cluster_id is None or filter_cluster_id in ["global", "blue_oceans"]:
+                        blue_ocean_indices.append(i)
+                    elif str(projects_data[p].get('cluster_id')) == str(filter_cluster_id):
+                        blue_ocean_indices.append(i)
         if blue_ocean_indices:
             x_oa = embeddings_2d[blue_ocean_indices, 0]
             y_oa = embeddings_2d[blue_ocean_indices, 1]
