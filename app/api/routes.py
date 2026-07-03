@@ -542,7 +542,7 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
                 score_colision=max_similitud_pct,
                 nivel_riesgo=collision_risk_level,
                 academic_alignment=min(100, quick_analysis["academic_alignment"]),
-                secciones_opcionales=section_check.get("found_optional", []),
+                secciones_opcionales=resultado_secciones.get("encontradas", []),
                 cluster_id=cluster_id,
             )
         except Exception as log_err:
