@@ -140,27 +140,32 @@ class VisualizationService:
             
         return scatter_data
 
-    def generate_3d_html(self):
-        
-        if not os.path.exists(self.umap_model_path):
-            return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
-
+    def generate_3d_html(self, filter_cluster_id: str = None):
         unique_ids, embeddings_384d, labels, _ = self._get_data_from_db()
         if not unique_ids:
             return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
         try:
-            reducer_clustering = joblib.load(self.umap_model_path)
-            embeddings_20d = reducer_clustering.transform(embeddings_384d)
-            
-            reducer_3d = umap.UMAP(n_components=3, n_neighbors=12, min_dist=0.05, metric='euclidean', random_state=42)
-            embeddings_3d = reducer_3d.fit_transform(embeddings_20d)
+            n_neighbors = min(12, len(embeddings_384d) - 1)
+            if n_neighbors < 2:
+                n_neighbors = 2
+            reducer_3d = umap.UMAP(n_components=3, n_neighbors=n_neighbors, min_dist=0.05, metric='cosine', random_state=42)
+            embeddings_3d = reducer_3d.fit_transform(embeddings_384d)
         except Exception as e:
             return f"<html><body><h1>Error de proyeccion</h1><p>{str(e)}</p></body></html>"
 
         fig = go.Figure()
         unique_labels = sorted(set(labels))
         cluster_labels_valid = [l for l in unique_labels if l != -1]
+
+        if filter_cluster_id == "blue_oceans":
+            cluster_labels_valid = []
+        elif filter_cluster_id is not None and filter_cluster_id != "global":
+            try:
+                target_id = int(filter_cluster_id)
+                cluster_labels_valid = [l for l in cluster_labels_valid if l == target_id]
+            except ValueError:
+                pass
 
         for cluster_id in cluster_labels_valid:
             indices = [i for i, l in enumerate(labels) if l == cluster_id]
@@ -182,6 +187,9 @@ class VisualizationService:
             ))
 
         blue_ocean_indices = [i for i, l in enumerate(labels) if l == -1]
+        if filter_cluster_id is not None and filter_cluster_id != "global" and filter_cluster_id != "blue_oceans":
+            blue_ocean_indices = []
+            
         if blue_ocean_indices:
             x_oa, y_oa, z_oa = embeddings_3d[blue_ocean_indices, 0], embeddings_3d[blue_ocean_indices, 1], embeddings_3d[blue_ocean_indices, 2]
             hover_oa = [f"<b>🌊 OCEANO AZUL</b><br><b>{unique_ids[i].replace('_', ' ').title()}</b>" for i in blue_ocean_indices]
@@ -213,19 +221,17 @@ class VisualizationService:
 
         return fig.to_html(include_plotlyjs='cdn', full_html=True)
 
-    def generate_2d_html(self):
-        if not os.path.exists(self.umap_model_path):
-            return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
-
+    def generate_2d_html(self, filter_cluster_id: str = None):
         unique_ids, embeddings_384d, labels, _ = self._get_data_from_db()
         if not unique_ids:
             return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
         try:
-            reducer_clustering = joblib.load(self.umap_model_path)
-            embeddings_20d = reducer_clustering.transform(embeddings_384d)
-            reducer_2d = umap.UMAP(n_components=2, n_neighbors=12, min_dist=0.05, metric='euclidean', random_state=42)
-            embeddings_2d = reducer_2d.fit_transform(embeddings_20d)
+            n_neighbors = min(12, len(embeddings_384d) - 1)
+            if n_neighbors < 2:
+                n_neighbors = 2
+            reducer_2d = umap.UMAP(n_components=2, n_neighbors=n_neighbors, min_dist=0.05, metric='cosine', random_state=42)
+            embeddings_2d = reducer_2d.fit_transform(embeddings_384d)
         except Exception as e:
             return f"<html><body><h1>Error de proyeccion</h1><p>{str(e)}</p></body></html>"
 
@@ -245,6 +251,15 @@ class VisualizationService:
         fig = go.Figure()
         unique_labels = sorted(set(labels))
         cluster_labels_valid = [l for l in unique_labels if l != -1]
+
+        if filter_cluster_id == "blue_oceans":
+            cluster_labels_valid = []
+        elif filter_cluster_id is not None and filter_cluster_id != "global":
+            try:
+                target_id = int(filter_cluster_id)
+                cluster_labels_valid = [l for l in cluster_labels_valid if l == target_id]
+            except ValueError:
+                pass
 
         # Outer + inner ellipses per cluster (KDE-style)
         for cluster_id in cluster_labels_valid:
@@ -286,6 +301,9 @@ class VisualizationService:
 
         # Blue Oceans as red stars
         blue_ocean_indices = [i for i, l in enumerate(labels) if l == -1]
+        if filter_cluster_id is not None and filter_cluster_id != "global" and filter_cluster_id != "blue_oceans":
+            blue_ocean_indices = []
+            
         if blue_ocean_indices:
             x_oa = embeddings_2d[blue_ocean_indices, 0]
             y_oa = embeddings_2d[blue_ocean_indices, 1]
