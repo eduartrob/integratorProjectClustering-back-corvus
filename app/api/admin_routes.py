@@ -4,11 +4,13 @@ from app.services.visualization_service import visualization_service
 
 router = APIRouter()
 
+from typing import Optional
+
 @router.get("/clusters-3d", response_class=HTMLResponse, tags=["Admin Panel"])
-async def get_clusters_3d_html():
+async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None):
     
     try:
-        html_content = visualization_service.generate_3d_html()
+        html_content = visualization_service.generate_3d_html(filter_cluster_id=filter_cluster_id)
         if "<h1>Error" in html_content:
             return HTMLResponse(content=html_content, status_code=500)
         return HTMLResponse(content=html_content, status_code=200)
@@ -16,9 +18,9 @@ async def get_clusters_3d_html():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/clusters-2d-html", response_class=HTMLResponse, tags=["Admin Panel"])
-async def get_clusters_2d_html():
+async def get_clusters_2d_html(filter_cluster_id: Optional[str] = None):
     try:
-        html_content = visualization_service.generate_2d_html()
+        html_content = visualization_service.generate_2d_html(filter_cluster_id=filter_cluster_id)
         if "<h1>Error" in html_content:
             return HTMLResponse(content=html_content, status_code=500)
         return HTMLResponse(content=html_content, status_code=200)
