@@ -75,13 +75,12 @@ class LlmClient:
             llm_provider = current_config.get("llm_provider", "ollama")
 
             prompt = (
-                "Eres un experto en taxonomía de proyectos de software. "
-                "Analiza estos fragmentos de proyectos de software y devuelve ÚNICAMENTE "
-                "un nombre de máximo 4 palabras que describa su temática principal en común. "
-                "No uses comillas, no des explicaciones. Solo el nombre.\n\n"
+                "Analiza estos fragmentos de proyectos académicos de ingeniería de software "
+                "y devuelve ÚNICAMENTE 2 palabras en español que describan su área temática principal.\n\n"
             )
             for i, text in enumerate(sample_texts):
-                prompt += f"Proyecto {i+1}: {text[:500]}...\n\n"
+                prompt += f"Proyecto {i+1}: {text[:300]}...\n\n"
+
 
             # Assuming llm-service has an endpoint for raw prompt/chat or we can use the provider directly
             # Wait, the llm-service may only have analyze-proposal.
