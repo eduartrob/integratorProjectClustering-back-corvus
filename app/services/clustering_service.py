@@ -112,29 +112,37 @@ class ClusteringEngineService:
           innovacion_pct  : float — inverso de la posición (qué tan alejado del centro)
           proyectos_cercanos: list — proyectos del mismo clúster
         """
-        self._cargar_ecosistema()
-        if self._embeddings is None:
-            return {"error": "Ecosistema no disponible", "cluster_id": -1}
+        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
+        if not unique_ids:
+            return {"error": "Ecosistema no disponible en Qdrant", "cluster_id": -1, "innovacion_pct": 50.0}
 
         vec_nuevo = np.array(vector_nuevo).reshape(1, -1)
-        X_total   = np.vstack([self._embeddings, vec_nuevo])
 
-        # Entrenar K-Means si es necesario o reusar
-        k = self._elegir_k(self._embeddings)
-        if self._kmeans is None or self._kmeans.n_clusters != k:
-            self._kmeans = KMeans(n_clusters=k, random_state=42, n_init="auto")
-            self._kmeans.fit(self._embeddings)
-            logger.info(f"[Clustering] K-Means entrenado con K={k}.")
+        unique_labels = sorted(set(labels))
+        valid_labels = [l for l in unique_labels if l != -1]
+        
+        if not valid_labels:
+            return {"error": "No hay clusters válidos en Qdrant", "cluster_id": -1, "innovacion_pct": 50.0}
 
-        cluster_id = int(self._kmeans.predict(vec_nuevo)[0])
-        centroide  = self._kmeans.cluster_centers_[cluster_id]
+        centroids = []
+        for l in valid_labels:
+            indices = [i for i, label in enumerate(labels) if label == l]
+            centroids.append(np.mean(embeddings_384d[indices], axis=0))
+            
+        centroids = np.array(centroids)
+        distances = np.linalg.norm(centroids - vec_nuevo, axis=1)
+        closest_idx = int(np.argmin(distances))
+        cluster_id = int(valid_labels[closest_idx])
+        centroide = centroids[closest_idx]
+        
+        k = len(valid_labels)
 
         # Calcular posición relativa al radio del clúster
-        dist_nuevo = float(np.linalg.norm(vec_nuevo[0] - centroide))
-        indices_cluster = np.where(self._kmeans.labels_ == cluster_id)[0]
+        dist_nuevo = float(np.min(distances))
+        indices_cluster = [i for i, label in enumerate(labels) if label == cluster_id]
         if len(indices_cluster) > 0:
             dists_miembros = np.linalg.norm(
-                self._embeddings[indices_cluster] - centroide, axis=1
+                embeddings_384d[indices_cluster] - centroide, axis=1
             )
             radio = float(np.max(dists_miembros)) if len(dists_miembros) else dist_nuevo
         else:
@@ -143,22 +151,17 @@ class ClusteringEngineService:
         posicion_pct   = round(min((dist_nuevo / radio) * 100, 100), 1) if radio > 0 else 0.0
         innovacion_pct = round(100 - posicion_pct, 1)
 
-        # Proyectos cercanos del mismo clúster
+        # Proyectos cercanos del mismo clúster (los 5 más cercanos)
         proyectos_cercanos = []
-        if self._df_eco is not None and len(indices_cluster) > 0:
-            col_nombre = next((c for c in ["nombre_proyecto", "titulo", "name", "proyecto"]
-                               if c in self._df_eco.columns), None)
-            if col_nombre:
-                proyectos_cercanos = self._df_eco.iloc[indices_cluster][col_nombre].tolist()[:5]
+        if len(indices_cluster) > 0:
+            miembros_dists = np.linalg.norm(embeddings_384d[indices_cluster] - vec_nuevo, axis=1)
+            closest_miembros_indices = np.argsort(miembros_dists)[:5]
+            for idx in closest_miembros_indices:
+                p_id = unique_ids[indices_cluster[idx]]
+                proyectos_cercanos.append(p_id.replace('_', ' ').title())
 
-        # PCA 2D para visualización (opcional, si el frontend lo pide)
-        try:
-            if self._pca is None:
-                self._pca = PCA(n_components=2, random_state=42)
-                self._embeddings_2d = self._pca.fit_transform(self._embeddings)
-            coord_nuevo_2d = self._pca.transform(vec_nuevo)[0].tolist()
-        except Exception:
-            coord_nuevo_2d = [0.0, 0.0]
+        # No pasamos coord_2d de PCA porque no alinea con UMAP.
+        coord_nuevo_2d = [0.0, 0.0]
 
         logger.info(f"[Clustering] Clúster asignado: {cluster_id}/{k} | Posición: {posicion_pct}%")
         return {
