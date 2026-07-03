@@ -40,9 +40,11 @@ async def get_clusters_2d():
 async def get_clusters_stats():
     
     try:
+        from app.services.clustering_service import clustering_engine
         stats = visualization_service.get_cluster_stats()
         if "error" in stats:
             raise HTTPException(status_code=500, detail=stats["error"])
+        stats["is_clustering_running"] = clustering_engine.is_running
         return stats
     except Exception as e:
         import traceback
@@ -143,13 +145,7 @@ async def execute_clustering(background_tasks: BackgroundTasks):
                             pending_projects_db.pop_pending_project(p["id"])
                             continue
                             
-                        # 3. Filtro de Secciones
-                        sec_result = nlp_service.validar_secciones_profesor(raw_text)
-                        if not sec_result.get("ok", False):
-                            print(f"Proyecto {p['id']} rechazado por Secciones faltantes: {sec_result.get('faltantes')}")
-                            pending_projects_db.pop_pending_project(p["id"])
-                            continue
-                            
+
                         # 4. Filtro de Coherencia
                         coh_result = nlp_service.validar_coherencia_semantica(raw_text)
                         if not coh_result.get("ok", False):
