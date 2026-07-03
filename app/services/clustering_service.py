@@ -37,6 +37,7 @@ class ClusteringEngineService:
         self._kmeans      = None   # modelo K-Means entrenado
         self._pca         = None   # PCA 2D para visualización
         self._embeddings_2d = None
+        self.is_running   = False
 
     # ── Carga lazy del modelo de embeddings ──────────────────────────────────
 
@@ -174,16 +175,22 @@ class ClusteringEngineService:
         Re-entrena el K-Means con todos los proyectos del corpus vivos en Qdrant,
         calculando todo dinámicamente: K óptimo, Isolation Forest para océanos azules, y LLM para nombres.
         """
-        logger.info("[Clustering] Iniciando Clustering Global...")
-        
-        # 1. Extraer todo de Qdrant (usando la lógica de visualization_service)
-        from app.services.qdrant_service import qdrant_service
-        vectors, payloads = qdrant_service.get_all_embeddings()
-        if not vectors or len(vectors) == 0:
-            logger.warning("[Clustering] Qdrant está vacío.")
+        if self.is_running:
+            logger.warning("[Clustering] Clustering ya está en ejecución.")
             return False
+            
+        self.is_running = True
+        try:
+            logger.info("[Clustering] Iniciando Clustering Global...")
+            
+            # 1. Extraer todo de Qdrant (usando la lógica de visualization_service)
+            from app.services.qdrant_service import qdrant_service
+            vectors, payloads = qdrant_service.get_all_embeddings()
+            if not vectors or len(vectors) == 0:
+                logger.warning("[Clustering] Qdrant está vacío.")
+                return False
 
-        projects_data = {}
+            projects_data = {}
         for i, meta in enumerate(payloads):
             p_id = meta.get('project_id')
             if not p_id:
@@ -285,6 +292,14 @@ class ClusteringEngineService:
             
         logger.info("[Clustering] Finalizado con éxito.")
         return True
+        
+        except Exception as e:
+            logger.error(f"[Clustering] Error crítico durante clustering global: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+        finally:
+            self.is_running = False
 
     # ── Compatibilidad con código viejo ──────────────────────────────────────
     def perform_clustering(self, embeddings, n_clusters=5):
