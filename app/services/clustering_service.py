@@ -112,7 +112,8 @@ class ClusteringEngineService:
           innovacion_pct  : float — inverso de la posición (qué tan alejado del centro)
           proyectos_cercanos: list — proyectos del mismo clúster
         """
-        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
+        from app.services.visualization_service import visualization_service
+        unique_ids, embeddings_384d, labels, projects_data = visualization_service._get_data_from_db()
         if not unique_ids:
             return {"error": "Ecosistema no disponible en Qdrant", "cluster_id": -1, "innovacion_pct": 50.0}
 
