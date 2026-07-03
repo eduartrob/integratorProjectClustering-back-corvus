@@ -73,7 +73,13 @@ class VisualizationService:
         
         unique_ids, _, labels, projects_data = self._get_data_from_db()
         if not unique_ids:
-            return {"error": "No hay datos en la base de datos"}
+            return {
+                "total_projects": 0,
+                "total_clusters": 0,
+                "blue_oceans": 0,
+                "clusters_detail": [],
+                "cluster_names": {}
+            }
 
         cluster_counts = Counter(labels)
         total_projects = len(unique_ids)
@@ -130,11 +136,11 @@ class VisualizationService:
     def generate_3d_html(self):
         
         if not os.path.exists(self.umap_model_path):
-            return "<html><body><h1>Error</h1><p>Modelo UMAP no encontrado. Ejecuta visualize_clusters.py primero.</p></body></html>"
+            return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
         unique_ids, embeddings_384d, labels, _ = self._get_data_from_db()
         if not unique_ids:
-            return "<html><body><h1>Error</h1><p>No hay datos suficientes en ChromaDB.</p></body></html>"
+            return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
         try:
             reducer_clustering = joblib.load(self.umap_model_path)
@@ -202,11 +208,11 @@ class VisualizationService:
 
     def generate_2d_html(self):
         if not os.path.exists(self.umap_model_path):
-            return "<html><body><h1>Error</h1><p>Modelo UMAP no encontrado.</p></body></html>"
+            return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
         unique_ids, embeddings_384d, labels, _ = self._get_data_from_db()
         if not unique_ids:
-            return "<html><body><h1>Error</h1><p>No hay datos en ChromaDB.</p></body></html>"
+            return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
         try:
             reducer_clustering = joblib.load(self.umap_model_path)
