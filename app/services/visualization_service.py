@@ -219,7 +219,16 @@ class VisualizationService:
                 bgcolor='#0a0f2e'
             ),
             paper_bgcolor='#060b1a', plot_bgcolor='#060b1a',
-            legend=dict(font=dict(color='white', size=11), bgcolor='rgba(10,15,46,0.8)', bordercolor='#1f295c', borderwidth=1),
+            legend=dict(
+                font=dict(color='white', size=11), 
+                bgcolor='rgba(10,15,46,0.85)', 
+                bordercolor='#1f295c', 
+                borderwidth=1,
+                yanchor="top",
+                y=0.98,
+                xanchor="right",
+                x=0.98
+            ),
             margin=dict(l=0, r=0, t=80, b=0),
             hoverlabel=dict(bgcolor='#0a0f2e', font=dict(color='white', size=13))
         )
@@ -335,8 +344,16 @@ class VisualizationService:
             yaxis=dict(title='UMAP Dim 2', gridcolor='#e8edf5', zerolinecolor='#d0d7e3',
                        tickfont=dict(color='#444')),
             paper_bgcolor='white', plot_bgcolor='#fafbff',
-            legend=dict(font=dict(color='#222', size=11), bordercolor='#dde3ef',
-                        borderwidth=1, bgcolor='white'),
+            legend=dict(
+                font=dict(color='#222', size=11), 
+                bordercolor='#dde3ef',
+                borderwidth=1, 
+                bgcolor='rgba(255, 255, 255, 0.85)',
+                yanchor="top",
+                y=0.98,
+                xanchor="right",
+                x=0.98
+            ),
             margin=dict(l=40, r=20, t=60, b=40),
             hoverlabel=dict(bgcolor='white', font=dict(color='black', size=13))
         )
