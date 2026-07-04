@@ -589,10 +589,9 @@ async def get_draft_proposal(user_id: str):
 
 @router.get("/analysis-status/{user_id}")
 async def get_analysis_status(user_id: str):
-    
     if user_id in analysis_progress_store:
         return analysis_progress_store[user_id]
-    return {"phase": 1, "message": "Procesando propuesta..."}
+    return {"phase": 0, "message": ""}
 
 async def _run_analysis_background(user_id: str, draft_path: str):
     
