@@ -10,6 +10,8 @@ from fastembed import TextEmbedding
 import logging
 
 from app.core import constants
+from app.core.config_manager import config_manager
+
 
 torch.set_num_threads(1)
 
@@ -71,6 +73,13 @@ class NLPService:
             if palabra in t:
                 logger.warning(f"[Filtro 2A] Documento bloqueado por: '{palabra}'")
                 return {"ok": False, "palabra_bloqueada": palabra}
+                
+        exclusion_rules = config_manager.get_exclusion_rules()
+        for rule in exclusion_rules:
+            if rule.lower() in t:
+                logger.warning(f"[Filtro 2A] Documento bloqueado por tema/cluster excluido: '{rule}'")
+                return {"ok": False, "palabra_bloqueada": rule}
+                
         return {"ok": True, "palabra_bloqueada": None}
 
     # ── FILTRO 2B: Secciones del profesor ─────────────────────────────────
@@ -85,17 +94,28 @@ class NLPService:
         t = re.sub(r'[*#_|]', ' ', t)
         t = re.sub(r'\s+', ' ', t)
         faltantes, encontradas = [], []
-        obligatorias_total = sum(1 for s in constants.SECCIONES_PROFESOR if s["obligatoria"])
+        
+        project_sections = config_manager.get_project_sections()
+        
+        if not project_sections:
+            return {
+                "ok": True,
+                "faltantes": [],
+                "encontradas": [],
+                "completitud_pct": 100.0,
+            }
+            
+        obligatorias_total = sum(1 for s in project_sections if s.get("obligatoria", False))
 
-        for seccion in constants.SECCIONES_PROFESOR:
-            if any(kw in t for kw in seccion["keywords"]):
-                encontradas.append(seccion["nombre"])
-            elif seccion["obligatoria"]:
-                faltantes.append(seccion["nombre"])
+        for seccion in project_sections:
+            if any(kw.lower() in t for kw in seccion.get("keywords", [])):
+                encontradas.append(seccion.get("nombre", ""))
+            elif seccion.get("obligatoria", False):
+                faltantes.append(seccion.get("nombre", ""))
 
-        obligatorias_encontradas = len([s for s in constants.SECCIONES_PROFESOR
-                                        if s["obligatoria"] and s["nombre"] in encontradas])
-        completitud_pct = round((obligatorias_encontradas / obligatorias_total) * 100, 1) if obligatorias_total else 0
+        obligatorias_encontradas = len([s for s in project_sections
+                                        if s.get("obligatoria", False) and s.get("nombre", "") in encontradas])
+        completitud_pct = round((obligatorias_encontradas / obligatorias_total) * 100, 1) if obligatorias_total > 0 else 100.0
 
         return {
             "ok": len(faltantes) == 0,
