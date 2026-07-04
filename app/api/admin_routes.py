@@ -205,6 +205,8 @@ class ConfigUpdateRequest(BaseModel):
     drive_folder_id: str = ""
     exclusion_rules: List[str] = []
     project_sections: List[Dict[str, Any]] = []
+    authorName: Optional[str] = None
+    authorPhotoUrl: Optional[str] = None
 
 @router.get("/config")
 async def get_system_config(response: Response, if_none_match: Optional[str] = Header(None)):
@@ -279,7 +281,7 @@ async def update_system_config(request: ConfigUpdateRequest):
     success = config_manager.save_config(new_config)
     if success:
         # Trigger silent notification after saving
-        await notify_rules(title=title, body=body)
+        await notify_rules(title=title, body=body, authorName=request.authorName, authorPhotoUrl=request.authorPhotoUrl)
         return {"message": "Configuración actualizada con éxito.", "config": new_config}
     raise HTTPException(status_code=500, detail="Error al actualizar la configuración.")
 
@@ -306,7 +308,7 @@ async def generate_sections():
     raise HTTPException(status_code=500, detail="Fallo en la generación con IA.")
 
 @router.post("/notify-rules", tags=["Admin Panel"])
-async def notify_rules(title: str = "Nuevas reglas y estructura de proyecto", body: str = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!"):
+async def notify_rules(title: str = "Nuevas reglas y estructura de proyecto", body: str = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!", authorName: Optional[str] = None, authorPhotoUrl: Optional[str] = None):
     print("📢 Intentando notificar a los dispositivos móviles (Push Visible)...", flush=True)
     try:
         async with httpx.AsyncClient() as client:
@@ -316,7 +318,11 @@ async def notify_rules(title: str = "Nuevas reglas y estructura de proyecto", bo
                     "topic": "config_updates",
                     "title": title,
                     "body": body,
-                    "data": {"type": "CONFIG_UPDATED"}
+                    "data": {
+                        "type": "CONFIG_UPDATED",
+                        "authorName": authorName or "",
+                        "authorPhotoUrl": authorPhotoUrl or ""
+                    }
                 }
             )
             if resp.status_code == 200:
