@@ -362,132 +362,116 @@ DRAFTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "drafts")
 os.makedirs(DRAFTS_DIR, exist_ok=True)
 
 @router.post("/pre-validate-proposal")
-async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = File(...)):
-    
+async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = File(...), background_tasks: BackgroundTasks = Depends(BackgroundTasks)):
     file_bytes = await file.read()
     filename_lower = file.filename.lower()
+    filename_real = file.filename
     
-    def _cpu_bound():
-        if not filename_lower.endswith(('.pdf', '.md', '.txt')):
-            raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
+    analysis_progress_store[user_id] = {"phase": 1, "message": "Iniciando pre-validación..."}
+    background_tasks.add_task(pre_validate_background, user_id, file_bytes, filename_lower, filename_real)
+    
+    return {"status": "pending", "message": "Pre-validación iniciada"}
 
-        # ── Extraer texto crudo del PDF ────────────────────────────────────
-        full_text = ""
-        if filename_lower.endswith('.pdf'):
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            full_text = pymupdf4llm.to_markdown(doc)
-        else:
-            full_text = file_bytes.decode('utf-8')
-
-        if not full_text or len(full_text.strip()) < 50:
-            raise HTTPException(
-                status_code=400,
-                detail="El documento no parece ser una propuesta de proyecto integrador. No se pudo extraer texto."
-            )
-
-        # ── Seguridad previa al pipeline ────────────────────────────────
-        if nlp_service.detect_prompt_injection(full_text):
-            raise HTTPException(status_code=403, detail="ALERTA: Se detectó un intento de inyección de prompt.")
-
-        # ── FILTRO 1: Clasificador ML entrenado ───────────────────────────
-        texto_limpio = nlp_service.strip_structure(full_text)
-        texto_limpio = nlp_service.normalize_homoglyphs(texto_limpio)
-        resultado_ml = nlp_service.clasificar_propuesta_ml(texto_limpio)
-        # if not resultado_ml["es_valido"]:
-        #     raise HTTPException(
-        #         status_code=400,
-        #         detail="[Filtro 1] El documento no tiene el contenido semántico de una propuesta de proyecto tecnológico."
-        #     )
-        calidad_vocabulario_pct = resultado_ml["probabilidades"].get(resultado_ml["etiqueta"], 0.0)
-        vector_nuevo = resultado_ml["vector"]
-
-        # ── FILTRO 2A: Blacklist extendida ──────────────────────────────
-        resultado_blacklist = nlp_service.validar_blacklist_extendida(full_text)
-        if not resultado_blacklist["ok"]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"[Filtro 2A] El documento contiene contenido no permitido ('{resultado_blacklist['palabra_bloqueada']}'). Sube tu propuesta de proyecto, no un CV o manual."
-            )
-
-        # ── FILTRO 2B: Secciones que el profesor define ─────────────────────
-        resultado_secciones = nlp_service.validar_secciones_profesor(full_text)
-        completitud_pct = resultado_secciones["completitud_pct"]
-        if not resultado_secciones["ok"]:
-            faltantes_str = ", ".join(f"'{s}'" for s in resultado_secciones["faltantes"])
-            raise HTTPException(
-                status_code=400,
-                detail=f"[Filtro 2B] Tu propuesta está incompleta. Falta información sobre: {faltantes_str}."
-            )
-
-        # ── FILTRO 3: Coherencia semántica entre secciones ─────────────────
-        resultado_coherencia = nlp_service.validar_coherencia_semantica(full_text)
-        coherencia_pct = resultado_coherencia["coherencia_pct"]
-        if not resultado_coherencia["ok"]:
-            pares_str = "; ".join(p["par"] for p in resultado_coherencia["pares_invalidos"])
-            raise HTTPException(
-                status_code=400,
-                detail=f"[Filtro 3] Las secciones de tu propuesta no son coherentes entre sí ({pares_str}). Asegúrate de que el Problema, el Objetivo y la Justificación hablen del mismo proyecto."
-            )
-
-        # ── Privacidad: anonimizar PII ─────────────────────────────────────
-        safe_text = nlp_service.anonymize_pii(texto_limpio)
-
-        # ── Vectorizar y buscar similares en Qdrant ────────────────────────
-        chunks = nlp_service.chunk_text(safe_text)
-        embeddings = nlp_service.vectorize(chunks)
-
-        max_similitud_pct = 0.0
-        similar_projects = []
-        if embeddings and len(embeddings) > 0:
-            query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
-            search_results = qdrant_service.search_similar_multi(
-                query_embeddings=query_subset, n_results=3
-            )
-            if search_results and search_results.get("documents"):
-                grouped_projects = {}
-                for q_idx in range(len(search_results["documents"])):
-                    docs  = search_results["documents"][q_idx]
-                    metas = search_results["metadatas"][q_idx]
-                    dists = search_results["distances"][q_idx]
-                    for doc, meta, dist in zip(docs, metas, dists):
-                        p_id = meta.get("project_id", "Desconocido")
-                        if p_id not in grouped_projects:
-                            grouped_projects[p_id] = {"chunks": [], "min_distance": float('inf')}
-                        if doc not in grouped_projects[p_id]["chunks"]:
-                            grouped_projects[p_id]["chunks"].append(doc)
-                        if dist < grouped_projects[p_id]["min_distance"]:
-                            grouped_projects[p_id]["min_distance"] = dist
-
-                sorted_projects = sorted(grouped_projects.items(), key=lambda x: x[1]["min_distance"])[:3]
-                for p_id, p_data in sorted_projects:
-                    dist = p_data["min_distance"]
-                    sim_factor = 1.0 - (dist / 0.4)
-                    similitud_pct = max(0, min(100, sim_factor * 100))
-                    if similitud_pct > max_similitud_pct:
-                        max_similitud_pct = similitud_pct
-                    similar_projects.append({
-                        "title": p_id.upper(),
-                        "content": " ".join(p_data["chunks"][:3]),
-                        "similarity_pct": similitud_pct
-                    })
-
-        resultado_cluster = {"cluster_id": -1, "cluster_total": 0,
-                             "innovacion_pct": 50.0, "posicion_pct": 50.0,
-                             "proyectos_cercanos": []}
-        if embeddings and len(embeddings) > 0:
-            import numpy as np
-            vector_qdrant = np.mean(embeddings, axis=0).tolist()
-            try:
-                resultado_cluster = clustering_engine.asignar_cluster(vector_qdrant)
-            except Exception as ce:
-                print(f"[WARN] K-Means no disponible: {ce}")
-
-        return (full_text, max_similitud_pct, similar_projects,
-                resultado_secciones, chunks, calidad_vocabulario_pct,
-                completitud_pct, coherencia_pct, resultado_cluster)
-
+async def pre_validate_background(user_id: str, file_bytes: bytes, filename_lower: str, filename_real: str):
     try:
-        import asyncio
+        active_analysis_tasks[user_id] = asyncio.current_task()
+        
+        def _cpu_bound():
+            if not filename_lower.endswith(('.pdf', '.md', '.txt')):
+                raise Exception("El archivo debe ser PDF, MD o TXT")
+
+            analysis_progress_store[user_id] = {"phase": 1, "message": "Extrayendo texto del documento..."}
+            full_text = ""
+            if filename_lower.endswith('.pdf'):
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                full_text = pymupdf4llm.to_markdown(doc)
+            else:
+                full_text = file_bytes.decode('utf-8')
+
+            if not full_text or len(full_text.strip()) < 50:
+                raise Exception("El documento no parece ser una propuesta de proyecto integrador. No se pudo extraer texto.")
+
+            if nlp_service.detect_prompt_injection(full_text):
+                raise Exception("ALERTA: Se detectó un intento de inyección de prompt.")
+
+            analysis_progress_store[user_id] = {"phase": 2, "message": "Ejecutando modelo clasificador..."}
+            texto_limpio = nlp_service.strip_structure(full_text)
+            texto_limpio = nlp_service.normalize_homoglyphs(texto_limpio)
+            resultado_ml = nlp_service.clasificar_propuesta_ml(texto_limpio)
+            calidad_vocabulario_pct = resultado_ml["probabilidades"].get(resultado_ml["etiqueta"], 0.0)
+            vector_nuevo = resultado_ml["vector"]
+
+            analysis_progress_store[user_id] = {"phase": 3, "message": "Validando secciones obligatorias..."}
+            resultado_blacklist = nlp_service.validar_blacklist_extendida(full_text)
+            if not resultado_blacklist["ok"]:
+                raise Exception(f"[Filtro 2A] El documento contiene contenido no permitido ('{resultado_blacklist['palabra_bloqueada']}'). Sube tu propuesta de proyecto, no un CV o manual.")
+
+            resultado_secciones = nlp_service.validar_secciones_profesor(full_text)
+            completitud_pct = resultado_secciones["completitud_pct"]
+            if not resultado_secciones["ok"]:
+                faltantes_str = ", ".join(f"'{s}'" for s in resultado_secciones["faltantes"])
+                raise Exception(f"[Filtro 2B] Tu propuesta está incompleta. Falta información sobre: {faltantes_str}.")
+
+            resultado_coherencia = nlp_service.validar_coherencia_semantica(full_text)
+            coherencia_pct = resultado_coherencia["coherencia_pct"]
+            if not resultado_coherencia["ok"]:
+                pares_str = "; ".join(p["par"] for p in resultado_coherencia["pares_invalidos"])
+                raise Exception(f"[Filtro 3] Las secciones de tu propuesta no son coherentes entre sí ({pares_str}). Asegúrate de que el Problema, el Objetivo y la Justificación hablen del mismo proyecto.")
+
+            analysis_progress_store[user_id] = {"phase": 4, "message": "Buscando colisiones en Qdrant..."}
+            safe_text = nlp_service.anonymize_pii(texto_limpio)
+            chunks = nlp_service.chunk_text(safe_text)
+            embeddings = nlp_service.vectorize(chunks)
+
+            max_similitud_pct = 0.0
+            similar_projects = []
+            if embeddings and len(embeddings) > 0:
+                query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
+                search_results = qdrant_service.search_similar_multi(
+                    query_embeddings=query_subset, n_results=3
+                )
+                if search_results and search_results.get("documents"):
+                    grouped_projects = {}
+                    for q_idx in range(len(search_results["documents"])):
+                        docs  = search_results["documents"][q_idx]
+                        metas = search_results["metadatas"][q_idx]
+                        dists = search_results["distances"][q_idx]
+                        for doc, meta, dist in zip(docs, metas, dists):
+                            p_id = meta.get("project_id", "Desconocido")
+                            if p_id not in grouped_projects:
+                                grouped_projects[p_id] = {"chunks": [], "min_distance": float('inf')}
+                            if doc not in grouped_projects[p_id]["chunks"]:
+                                grouped_projects[p_id]["chunks"].append(doc)
+                            if dist < grouped_projects[p_id]["min_distance"]:
+                                grouped_projects[p_id]["min_distance"] = dist
+
+                    sorted_projects = sorted(grouped_projects.items(), key=lambda x: x[1]["min_distance"])[:3]
+                    for p_id, p_data in sorted_projects:
+                        dist = p_data["min_distance"]
+                        sim_factor = 1.0 - (dist / 0.4)
+                        similitud_pct = max(0, min(100, sim_factor * 100))
+                        if similitud_pct > max_similitud_pct:
+                            max_similitud_pct = similitud_pct
+                        similar_projects.append({
+                            "title": p_id.upper(),
+                            "content": " ".join(p_data["chunks"][:3]),
+                            "similarity_pct": similitud_pct
+                        })
+
+            resultado_cluster = {"cluster_id": -1, "cluster_total": 0,
+                                 "innovacion_pct": 50.0, "posicion_pct": 50.0,
+                                 "proyectos_cercanos": []}
+            if embeddings and len(embeddings) > 0:
+                vector_qdrant = np.mean(embeddings, axis=0).tolist()
+                try:
+                    resultado_cluster = clustering_engine.asignar_cluster(vector_qdrant)
+                except Exception as ce:
+                    pass
+
+            return (full_text, max_similitud_pct, similar_projects,
+                    resultado_secciones, chunks, calidad_vocabulario_pct,
+                    completitud_pct, coherencia_pct, resultado_cluster)
+
         (full_text, max_similitud_pct, similar_projects,
          resultado_secciones, chunks, calidad_vocabulario_pct,
          completitud_pct, coherencia_pct, resultado_cluster) = await asyncio.to_thread(_cpu_bound)
@@ -502,7 +486,6 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
             "Bajo"
         )
 
-        # ── JSON de respuesta con las 4 métricas para los profesores ────────
         quick_analysis = {
             "status"  : "success",
             "estado"  : "APROBADO",
@@ -522,7 +505,6 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
             },
             "proyectos_similares": similar_projects,
             "secciones_encontradas": resultado_secciones.get("encontradas", []),
-            # Campos legacy para no romper el frontend actual
             "academic_alignment"   : round(completitud_pct, 1),
             "collision_risk_pct"   : round(max_similitud_pct, 1),
             "collision_risk_level" : collision_risk_level,
@@ -539,7 +521,7 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         try:
             log_inference(
                 user_id=user_id,
-                filename=file.filename,
+                filename=filename_real,
                 score_colision=max_similitud_pct,
                 nivel_riesgo=collision_risk_level,
                 academic_alignment=min(100, quick_analysis["academic_alignment"]),
@@ -547,15 +529,15 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
                 cluster_id=cluster_id,
             )
         except Exception as log_err:
-            print(f"[WARN] No se pudo guardar en inference_log: {log_err}")
+            pass
 
-        # Registrar eventos en ActivityLog centralizado (fuego y olvido)
         try:
+            from app.config.settings import settings
             async with httpx.AsyncClient() as client:
                 await client.post(f"{settings.AUTH_SERVICE_URL}/admin/activity", json={
                     "userId": user_id,
                     "action": "UPLOAD_DOCUMENT",
-                    "detail": f"Proyecto: {file.filename}",
+                    "detail": f"Proyecto: {filename_real}",
                     "ipAddress": "127.0.0.1"
                 }, timeout=3.0)
                 
@@ -563,11 +545,11 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
                     await client.post(f"{settings.AUTH_SERVICE_URL}/admin/activity", json={
                         "userId": None,
                         "action": "SYSTEM_ALERT",
-                        "detail": f"Riesgo {collision_risk_level} ({max_similitud_pct}%) en {file.filename}",
+                        "detail": f"Riesgo {collision_risk_level} ({max_similitud_pct}%) en {filename_real}",
                         "ipAddress": "127.0.0.1"
                     }, timeout=3.0)
         except Exception as e:
-            print(f"[WARN] No se pudo registrar actividad en auth-service: {e}")
+            pass
 
         draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
         draft_data = {
@@ -578,13 +560,15 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         with open(draft_path, "w", encoding="utf-8") as f:
             json.dump(draft_data, f, ensure_ascii=False)
 
-        return quick_analysis
+        analysis_result_store[user_id] = quick_analysis
+        analysis_progress_store[user_id] = {"phase": 9, "message": "Pre-validación exitosa"}
 
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"[ERROR] Error interno en pre_validate_proposal: {str(e)}")
-        raise HTTPException(status_code=500, detail="El servidor no está disponible en este momento. Por favor, contacta a soporte.")
+        error_msg = str(e).replace('Exception: ', '').replace('Exception ', '')
+        analysis_progress_store[user_id] = {"phase": -1, "message": error_msg}
+    finally:
+        active_analysis_tasks.pop(user_id, None)
+
 
 @router.get("/inference-history")
 async def inference_history(limit: int = 50, offset: int = 0):
