@@ -261,18 +261,20 @@ async def generate_sections():
 
 @router.post("/notify-rules", tags=["Admin Panel"])
 async def notify_rules():
-    print("📢 Intentando notificar a los dispositivos móviles (Push Silencioso)...", flush=True)
+    print("📢 Intentando notificar a los dispositivos móviles (Push Visible)...", flush=True)
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                "http://notifications-service:3001/api/notifications/topic",
+                "http://notifications-service:3001/api/notifications/topic/push",
                 json={
                     "topic": "config_updates",
+                    "title": "Nuevas reglas y estructura de proyecto",
+                    "body": "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!",
                     "data": {"type": "CONFIG_UPDATED"}
                 }
             )
             if resp.status_code == 200:
-                print("✅ Notificación silenciosa enviada correctamente al servidor de Node.")
+                print("✅ Notificación enviada correctamente al servidor de Node.")
                 return {"message": "Notificación enviada a los dispositivos."}
             else:
                 print(f"❌ Error al notificar: Código {resp.status_code}, Body: {resp.text}")
