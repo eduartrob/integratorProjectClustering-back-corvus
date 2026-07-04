@@ -223,6 +223,8 @@ async def get_system_config(response: Response, if_none_match: Optional[str] = H
 
 @router.post("/config")
 async def update_system_config(request: ConfigUpdateRequest):
+    old_config = config_manager.get_config()
+    
     new_config = {
         "allowed_extensions": request.allowed_extensions,
         "llm_provider": request.llm_provider,
@@ -230,10 +232,54 @@ async def update_system_config(request: ConfigUpdateRequest):
         "exclusion_rules": request.exclusion_rules,
         "project_sections": request.project_sections
     }
+    
+    # --- Generar notificación descriptiva ---
+    title_parts = []
+    body_parts = []
+    
+    old_rules = set(old_config.get("exclusion_rules", []))
+    new_rules = set(request.exclusion_rules)
+    blocked = new_rules - old_rules
+    unblocked = old_rules - new_rules
+    
+    if blocked:
+        body_parts.append(f"Se han bloqueado los temas: {', '.join(blocked)}")
+    if unblocked:
+        body_parts.append(f"Se han desbloqueado los temas: {', '.join(unblocked)}")
+        
+    if blocked or unblocked:
+        title_parts.append("Temas")
+        
+    old_sec_names = set(s.get("nombre", "") for s in old_config.get("project_sections", []))
+    new_sec_names = set(s.get("nombre", "") for s in request.project_sections)
+    
+    added_sections = new_sec_names - old_sec_names
+    removed_sections = old_sec_names - new_sec_names
+    
+    if added_sections:
+        body_parts.append(f"Secciones añadidas: {', '.join(added_sections)}")
+    if removed_sections:
+        body_parts.append(f"Secciones eliminadas: {', '.join(removed_sections)}")
+        
+    if added_sections or removed_sections:
+        title_parts.append("Estructura de Proyecto")
+        
+    if not title_parts:
+        title = "Nuevas reglas y estructura de proyecto"
+    else:
+        title = "Actualización en: " + " y ".join(title_parts)
+        
+    if not body_parts:
+        body = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!"
+    else:
+        body = ". ".join(body_parts) + "."
+        
+    # ----------------------------------------
+
     success = config_manager.save_config(new_config)
     if success:
         # Trigger silent notification after saving
-        await notify_rules()
+        await notify_rules(title=title, body=body)
         return {"message": "Configuración actualizada con éxito.", "config": new_config}
     raise HTTPException(status_code=500, detail="Error al actualizar la configuración.")
 
@@ -260,7 +306,7 @@ async def generate_sections():
     raise HTTPException(status_code=500, detail="Fallo en la generación con IA.")
 
 @router.post("/notify-rules", tags=["Admin Panel"])
-async def notify_rules():
+async def notify_rules(title: str = "Nuevas reglas y estructura de proyecto", body: str = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!"):
     print("📢 Intentando notificar a los dispositivos móviles (Push Visible)...", flush=True)
     try:
         async with httpx.AsyncClient() as client:
@@ -268,8 +314,8 @@ async def notify_rules():
                 "http://notifications-service:3001/api/notifications/topic/push",
                 json={
                     "topic": "config_updates",
-                    "title": "Nuevas reglas y estructura de proyecto",
-                    "body": "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!",
+                    "title": title,
+                    "body": body,
                     "data": {"type": "CONFIG_UPDATED"}
                 }
             )
