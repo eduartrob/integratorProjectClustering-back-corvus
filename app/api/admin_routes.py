@@ -248,7 +248,7 @@ async def update_system_config(request: ConfigUpdateRequest):
         body_parts.append(f"Se han desbloqueado los temas: {', '.join(unblocked)}")
         
     if blocked or unblocked:
-        title_parts.append("Temas")
+        title_parts.append("Se han actualizado los Temas para Proyecto")
         
     old_sec_names = set(s.get("nombre", "") for s in old_config.get("project_sections", []))
     new_sec_names = set(s.get("nombre", "") for s in request.project_sections)
@@ -262,12 +262,12 @@ async def update_system_config(request: ConfigUpdateRequest):
         body_parts.append(f"Secciones eliminadas: {', '.join(removed_sections)}")
         
     if added_sections or removed_sections:
-        title_parts.append("Estructura de Proyecto")
+        title_parts.append("Se ha actualizado la Estructura de Proyecto")
         
     if not title_parts:
         title = "Nuevas reglas y estructura de proyecto"
     else:
-        title = "Actualización en: " + " y ".join(title_parts)
+        title = " y ".join(title_parts)
         
     if not body_parts:
         body = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!"
