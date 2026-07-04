@@ -362,7 +362,7 @@ DRAFTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "drafts")
 os.makedirs(DRAFTS_DIR, exist_ok=True)
 
 @router.post("/pre-validate-proposal")
-async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = File(...), background_tasks: BackgroundTasks = Depends(BackgroundTasks)):
+async def pre_validate_proposal(background_tasks: BackgroundTasks, user_id: str = Form(...), file: UploadFile = File(...)):
     file_bytes = await file.read()
     filename_lower = file.filename.lower()
     filename_real = file.filename
