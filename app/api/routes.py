@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks, Form
 from pydantic import BaseModel
 from typing import List
@@ -7,20 +8,26 @@ import io
 import os
 import json
 import numpy as np
+import httpx
 
 from app.services.drive_service import drive_service
 from app.services.nlp_service import nlp_service
-from app.services.chroma_service import chroma_service
-from app.services.cluster_logic import cluster_logic
+from app.services.qdrant_service import qdrant_service
+from app.services.clustering_service import clustering_engine
 from app.services.rabbitmq_service import rabbitmq_service
-from app.services.ollama_service import ollama_service
+from app.services.llm_client import llm_client as ollama_service
+from app.services.inference_log_service import log_inference, get_history
 
 router = APIRouter()
 
-# Global in-memory store for sync progress polling
 progress_store = {}
+analysis_progress_store = {}
+analysis_result_store = {}
+active_analysis_tasks = {}
+analysis_lock = asyncio.Lock()
 
-
+# Las secciones de validación y la blacklist ahora viven en nlp_service.py
+# (validar_secciones_profesor, validar_blacklist_extendida, validar_coherencia_semantica)
 
 class ProcessFolderRequest(BaseModel):
     folder_id: str
@@ -31,14 +38,12 @@ class ProcessFolderRequest(BaseModel):
 async def health_check():
     return {"status": "ok", "service": "integratorProjectClustering"}
 
-
 def process_folder_background(folder_id: str, access_token: str, user_id: str):
     print(f"================ INICIANDO TAREA DE BACKGROUND PARA FOLDER {folder_id} ================", flush=True)
     progress_store[folder_id] = {"progress": 0, "total": 100, "message": "Iniciando..."}
     try:
         files = drive_service.get_files_in_folder(folder_id, access_token)
         total_files = len(files)
-        # Escala de 100 puntos por archivo para máxima fluidez
         total_progress = total_files * 100 if total_files > 0 else 100
         
         progress_store[folder_id] = {"progress": 0, "total": total_progress, "message": f"Se encontraron {total_files} archivos"}
@@ -57,81 +62,48 @@ def process_folder_background(folder_id: str, access_token: str, user_id: str):
         for i, file_info in enumerate(files):
             file_id = file_info.get("id")
             file_name = file_info.get("name")
-            base_progress = i * 100
+            base_progress = int((i / total_files) * 100)
             
             progress_store[folder_id] = {
-                "progress": base_progress + 5,
-                "total": total_progress,
-                "message": f"[{i+1}/{total_files}] Descargando {file_name}..."
+                "progress": base_progress,
+                "total": 100,
+                "message": f"[{i+1}/{total_files}] Detectando y extrayendo texto de {file_name}..."
             }
             
             try:
+                # 1. Download and extract raw text
                 text = drive_service.process_drive_file(file_id, file_name, access_token)
                 if not text or not nlp_service.is_valid_project(text):
                     continue
                 
-                clean_text = nlp_service.strip_structure(text)
-                safe_text = nlp_service.anonymize_pii(clean_text)
-                chunks = nlp_service.chunk_text(safe_text)
-                total_chunks = len(chunks)
-                
-                # VECTORIZACIÓN POR LOTES (No altera el resultado de la IA)
-                # El modelo procesa 3 fragmentos, los guarda, luego otros 3, etc.
-                # Al final, se unen en la misma lista exacta como si fuera de un jalón.
-                embeddings = []
-                batch_size = 3
-                for j in range(0, total_chunks, batch_size):
-                    batch = chunks[j:j+batch_size]
-                    
-                    fraction = (j / total_chunks) if total_chunks > 0 else 1
-                    sub_progress = int(10 + (fraction * 80))
-                    
-                    progress_store[folder_id] = {
-                        "progress": base_progress + sub_progress,
-                        "total": total_progress,
-                        "message": f"[{i+1}/{total_files}] Vectorizando: {j}/{total_chunks} fragmentos"
-                    }
-                    
-                    # Llamamos a tu misma función de IA, solo que con pedazos más chicos
-                    batch_embeddings = nlp_service.vectorize(batch)
-                    embeddings.extend(batch_embeddings)
-                
-                # Al salir del bucle, la variable 'embeddings' tiene exactamente los mismos 
-                # datos matemáticos que si lo hubieras corrido todo junto. ¡100% seguro!
-                
-                progress_store[folder_id] = {
-                    "progress": base_progress + 95,
-                    "total": total_progress,
-                    "message": f"[{i+1}/{total_files}] Guardando proyecto en BD..."
-                }
-                
+                # 2. Guardar en la DB de proyectos pendientes
                 project_id = file_name.replace(".pdf", "").replace(".PDF", "").strip().lower()
                 url_drive = f"https://drive.google.com/file/d/{file_id}/view"
                 
-                chroma_service.add_vectors(
+                from app.services.pending_projects_db import pending_projects_db
+                pending_projects_db.add_pending_project(
                     project_id=project_id,
-                    texts=chunks,
-                    embeddings=embeddings,
-                    url_drive=url_drive
+                    name=file_name.replace(".pdf", "").replace(".PDF", "").strip().title(),
+                    raw_text=text,
+                    source_url=url_drive
                 )
-                print(f"✅ Vectorizado y guardado: {project_id} ({len(chunks)} chunks)", flush=True)
+                print(f"✅ Documento marcado como pendiente: {project_id}", flush=True)
             except Exception as e:
-                print(f"❌ Error procesando {file_name}: {e}", flush=True)
+                print(f"❌ Error guardando {file_name} como pendiente: {e}", flush=True)
                 continue
                 
         progress_store[folder_id] = {
-            "progress": total_progress,
-            "total": total_progress,
-            "message": "¡Sincronización completada!"
+            "progress": 100,
+            "total": 100,
+            "message": "¡Escaneo completado! Proyectos listos para clusterización global."
         }
         
-        # Enviar notificación Push de éxito a Firebase!
         rabbitmq_service.publish_progress(
             user_id=user_id,
             type_event="sync_complete",
-            progress=total_progress,
-            total=total_progress,
-            message="¡Archivos sincronizados y vectorizados en Corvus!"
+            progress=100,
+            total=100,
+            message="¡Archivos detectados en Drive y puestos en cola para tratamiento!"
         )
         
         
@@ -153,60 +125,43 @@ def process_folder_background(folder_id: str, access_token: str, user_id: str):
         }
 
 @router.post("/process-folder", status_code=202)
-async def process_folder(request: ProcessFolderRequest, background_tasks: BackgroundTasks, Form):
-    """
-    Inicia la sincronización asíncrona de una carpeta entera de Google Drive.
-    """
+async def process_folder(request: ProcessFolderRequest, background_tasks: BackgroundTasks):
+    
     try:
         import requests
         from app.core.config import settings
         
-        # Validar si ya está sincronizada internamente llamando al Auth Service
         auth_url = f"{settings.AUTH_SERVICE_URL}/folders/check/{request.folder_id}"
         response = requests.get(auth_url, timeout=5)
         
         if response.status_code == 200:
             data = response.json()
             if data.get("exists") is True:
-                # Si ya existe, retornamos inmediatamente y NO iniciamos la tarea asíncrona
                 return {"message": "La carpeta ya se encuentra sincronizada.", "sync_skipped": True}
                 
     except Exception as e:
         print(f"Error verificando carpeta con Auth Service: {e}")
-        # Si falla el servicio, continuamos con el flujo normal para no bloquear
 
     background_tasks.add_task(process_folder_background, request.folder_id, request.access_token, request.user_id)
     return {"message": "Sincronización iniciada en segundo plano.", "sync_skipped": False}
 
 @router.get("/sync-status/{folder_id}")
 async def get_sync_status(folder_id: str):
-    """
-    Devuelve el estado de la sincronización en progreso para el polling del móvil.
-    """
+    
     if folder_id in progress_store:
         return progress_store[folder_id]
     return {"progress": 0, "total": 100, "message": "Esperando inicialización..."}
 
-
 @router.get("/blue-ocean/{project_id}")
 async def check_blue_ocean(project_id: str):
-    """
-    Verifica si un proyecto es un 'Océano Azul' calculando su distancia
-    contra el historial de proyectos usando Scikit-Learn.
-    """
+    
     try:
-        # Extraemos TODOS los vectores y DOCUMENTOS (texto puro) de ChromaDB
-        all_data = chroma_service.get_all_embeddings()
-        embeddings = all_data.get("embeddings")
-        metadatas = all_data.get("metadatas")
-        documents = all_data.get("documents")
+        embeddings, metadatas = qdrant_service.get_all_embeddings()
+        documents = [meta.get("text", "") for meta in metadatas] if metadatas else []
 
         if embeddings is None or len(embeddings) == 0:
             raise HTTPException(status_code=404, detail="No hay historial de proyectos para comparar.")
 
-        # 1. Agrupar fragmentos por proyecto (Texto e IDs)
-        # Necesitamos reconstruir el texto completo de cada proyecto para el TF-IDF
-        # y promediar los embeddings para la Búsqueda Semántica
         projects_texts = {}
         projects_embeddings = {}
         
@@ -216,9 +171,7 @@ async def check_blue_ocean(project_id: str):
                 projects_texts[p_id] = ""
                 projects_embeddings[p_id] = []
             
-            # Juntamos los fragmentos de texto
             projects_texts[p_id] += documents[i] + " "
-            # Juntamos los vectores
             projects_embeddings[p_id].append(embeddings[i])
 
         if project_id not in projects_texts:
@@ -227,7 +180,6 @@ async def check_blue_ocean(project_id: str):
         new_project_text = projects_texts[project_id]
         new_project_embedding = np.mean(projects_embeddings[project_id], axis=0).tolist()
         
-        # Filtramos el historial (todo menos el proyecto actual)
         history_names = []
         history_texts = []
         history_embeddings = []
@@ -236,20 +188,16 @@ async def check_blue_ocean(project_id: str):
             if p_id != project_id:
                 history_names.append(p_id)
                 history_texts.append(text)
-                # El vector del historial es el promedio de todos sus fragmentos
                 history_embeddings.append(np.mean(projects_embeddings[p_id], axis=0).tolist())
 
-        # 2. Correr la lógica de Océanos Azules usando Motor Híbrido (Denso + TF-IDF)
         result = cluster_logic.find_blue_oceans_hybrid(
             new_project_text=new_project_text,
             existing_texts=history_texts,
             new_project_embedding=new_project_embedding,
             existing_embeddings=history_embeddings,
             existing_names=history_names
-            # Sin threshold fijo: cluster_logic usa umbral dinámico por percentil
         )
 
-        # Agregamos el ID para claridad en el Frontend
         result["project_id"] = project_id
         return result
     except HTTPException:
@@ -259,78 +207,95 @@ async def check_blue_ocean(project_id: str):
 
 @router.get("/blue-ocean-niches")
 async def get_blue_ocean_niches():
-    """
-    Retorna una lista de nichos de mercado u 'Océanos Azules' inexplorados 
-    basado en el análisis global de los proyectos (leído desde unexplored_topics.json).
-    """
-    import json
-    from pathlib import Path
+    
+    from app.services.qdrant_service import qdrant_service
+    from app.services.blue_ocean_db import blue_ocean_db
+    import time
+
     
     niches = []
     try:
-        model_dir = Path(__file__).resolve().parent.parent / "models"
-        topics_path = model_dir / "unexplored_topics.json"
+        vectors, payloads = qdrant_service.get_all_embeddings()
         
-        if topics_path.exists():
-            with open(topics_path, "r", encoding="utf-8") as f:
-                topics = json.load(f)
-                
-            for t in topics:
-                niches.append({
-                    "category": "INNOVACIÓN DETECTADA",
-                    "tag": "Área Inexplorada",
-                    "title": t,
-                    "description": "Área de oportunidad identificada matemáticamente a través de los vacíos en el grafo topológico HDBSCAN."
-                })
+        unique_projects = {}
+        if payloads:
+            for meta in payloads:
+                if meta and meta.get('is_blue_ocean'):
+                    p_id = meta.get('project_id')
+                    if p_id and p_id not in unique_projects:
+                        unique_projects[p_id] = meta
+        
+        for p_id, meta in unique_projects.items():
+            name = p_id.replace('proyecto_', '').replace('.md', '').replace('.pdf', '').replace('_', ' ').title()
+            
+            blue_ocean_db.register_niche_if_not_exists(p_id)
+            niche_state = blue_ocean_db.get_niche(p_id)
+            
+            hours_since_creation = (time.time() - niche_state.get('created_at', time.time())) / 3600.0
+            views = niche_state.get('view_count', 0)
+            gravity_score = (views + 1) / ((hours_since_creation + 2) ** 1.5)
+            
+            niches.append({
+                "id": p_id,
+                "category": "INNOVACIÓN ACADÉMICA",
+                "tag": "Océano Azul Real",
+                "title": name,
+                "description": "Este proyecto ha sido clasificado como una anomalía semántica de alta varianza, indicando un enfoque único e inexplorado respecto a todos los demás trabajos en la base de datos.",
+                "view_count": views,
+                "recent_viewers": niche_state.get('recent_viewers', []),
+                "analysis_status": niche_state.get('analysis_status', 'pending'),
+                "_gravity_score": gravity_score
+            })
+            
+        niches.sort(key=lambda x: x['_gravity_score'], reverse=True)
+        
+        for niche in niches:
+            niche.pop('_gravity_score', None)
+            
     except Exception as e:
-        print(f"Error cargando unexplored_topics.json en routes: {e}")
+        print(f"Error extrayendo los océanos azules desde ChromaDB: {e}")
         
-    # Fallback si falla o está vacío
     if not niches:
         niches = [
             {
-                "category": "IA & Sostenibilidad",
-                "tag": "Alto Potencial",
-                "title": "IA en Agricultura de Precisión",
-                "description": "Optimización de recursos hídricos y predicción de cosechas mediante modelos de RAG alimentados por datos climáticos en tiempo real y sensores IoT."
-            },
-            {
-                "category": "Logística & Supply Chain",
-                "tag": "Innovación",
-                "title": "Logística Circular",
-                "description": "Rediseño de cadenas de suministro para eliminar residuos, utilizando blockchain para trazabilidad de materiales reciclados."
-            },
-            {
-                "category": "BIOTECH",
-                "tag": "Futurista",
-                "title": "Biomateriales de Construcción",
-                "description": "Desarrollo de estructuras vivas y auto-reparables utilizando micelio fúngico integrado en arquitecturas modulares."
-            },
-            {
-                "category": "FINTECH & QUANTUM",
-                "tag": "Novedad Alta",
-                "title": "Computación Cuántica en Finanzas",
-                "description": "Modelado de riesgos hiper-complejos y optimización de carteras utilizando algoritmos cuánticos híbridos."
+                "category": "MÉTRICA VACÍA",
+                "tag": "Requiere Ejecución",
+                "title": "Aún no hay Océanos Azules",
+                "description": "El algoritmo de clustering global aún no ha detectado proyectos con suficiente originalidad semántica o se requiere ejecutar un análisis con un mayor volumen de documentos."
             }
         ]
 
     return {
-        "title": "Temas Inexplorados",
-        "description": "Descubre océanos azules en la intersección de la tecnología y la sociedad. Selecciona un área de innovación para comenzar tu investigación.",
+        "title": "Océanos Azules (Proyectos Reales)",
+        "description": "Descubre los verdaderos océanos azules en la intersección de la tecnología y la academia, calculados en tiempo real por Corvus HDBSCAN.",
         "niches": niches
+    }
+
+from pydantic import BaseModel
+
+class NicheViewRequest(BaseModel):
+    user_avatar: str = None
+
+@router.post("/blue-ocean-niches/{niche_id}/view")
+async def track_niche_view(niche_id: str, payload: NicheViewRequest):
+    
+    from app.services.blue_ocean_db import blue_ocean_db
+    
+    niche_state = blue_ocean_db.track_view(niche_id, payload.user_avatar)
+    
+    return {
+        "status": "success",
+        "niche_id": niche_id,
+        "view_count": niche_state.get("view_count", 0),
+        "analysis_status": niche_state.get("analysis_status"),
+        "analysis_data": niche_state.get("analysis_data")
     }
 
 from fastapi import Header
 
 @router.post("/populate-from-local-folder")
 async def populate_from_local_folder(x_api_key: str = Header(default=None)):
-    """
-    Ruta para procesar todos los archivos locales en la carpeta projectsTests.
-    Fase 1: Extracción
-    Fase 2: NLP y SpaCy (Anonimización)
-    Fase 3: Vectorización
-    Y finalmente guardar en ChromaDB de forma persistente.
-    """
+    
     import os
     from pathlib import Path
     
@@ -352,7 +317,6 @@ async def populate_from_local_folder(x_api_key: str = Header(default=None)):
         project_id = filename.lower().replace('.pdf', '').replace('.txt', '').replace('.md', '')
         
         try:
-            # Fase 1: Extracción
             full_text = ""
             if filename.lower().endswith('.pdf'):
                 doc = fitz.open(file_path)
@@ -365,24 +329,23 @@ async def populate_from_local_folder(x_api_key: str = Header(default=None)):
                 results.append({"file": filename, "status": "error", "message": "Texto vacío"})
                 continue
                 
-            # Fase 2: Filtrado y Anonimización
             clean_text = nlp_service.strip_structure(full_text)
             safe_text = nlp_service.anonymize_pii(clean_text)
             
-            # Fase 3: Vectorización
             chunks = nlp_service.chunk_text(safe_text)
             embeddings = nlp_service.vectorize(chunks)
             
-            if not embeddings:
+            if embeddings is None or len(embeddings) == 0:
                 results.append({"file": filename, "status": "error", "message": "Fallo vectorización"})
                 continue
                 
-            # Almacenar en ChromaDB
-            chroma_service.add_vectors(
-                project_id=project_id,
-                texts=chunks,
-                embeddings=embeddings,
-                url_drive=f"local://projectsTests/{filename}"
+            qdrant_service.add_embeddings(
+                vectors=embeddings,
+                payloads=[{
+                    "project_id": project_id,
+                    "text": chunk,
+                    "source_url": f"local://projectsTests/{filename}"
+                } for chunk in chunks]
             )
             
             results.append({"file": filename, "status": "success", "chunks": len(chunks)})
@@ -395,150 +358,199 @@ async def populate_from_local_folder(x_api_key: str = Header(default=None)):
         "resultados": results
     }
 
-# Asegurar que existe el directorio de drafts
 DRAFTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "drafts")
 os.makedirs(DRAFTS_DIR, exist_ok=True)
 
 @router.post("/pre-validate-proposal")
-async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = File(...)):
-    """
-    Realiza una validación RÁPIDA y GUARDA un borrador local.
-    """
+async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = File(...), background_tasks: BackgroundTasks = Depends(BackgroundTasks)):
+    file_bytes = await file.read()
+    filename_lower = file.filename.lower()
+    filename_real = file.filename
+    
+    analysis_progress_store[user_id] = {"phase": 1, "message": "Iniciando pre-validación..."}
+    background_tasks.add_task(pre_validate_background, user_id, file_bytes, filename_lower, filename_real)
+    
+    return {"status": "pending", "message": "Pre-validación iniciada"}
+
+async def pre_validate_background(user_id: str, file_bytes: bytes, filename_lower: str, filename_real: str):
     try:
-        filename_lower = file.filename.lower()
-        if not filename_lower.endswith(('.pdf', '.md', '.txt')):
-            raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
-            
-        file_bytes = await file.read()
-        full_text = ""
-        if filename_lower.endswith('.pdf'):
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            full_text = pymupdf4llm.to_markdown(doc)
-        else:
-            full_text = file_bytes.decode('utf-8')
-                    
-        if not full_text:
-            raise HTTPException(status_code=400, detail="No se pudo extraer texto del documento.")
+        active_analysis_tasks[user_id] = asyncio.current_task()
+        
+        def _cpu_bound():
+            if not filename_lower.endswith(('.pdf', '.md', '.txt')):
+                raise Exception("El archivo debe ser PDF, MD o TXT")
 
-        if nlp_service.detect_prompt_injection(full_text):
-            raise HTTPException(status_code=403, detail="ALERTA: Se detectó un intento de inyección de prompt.")
-
-        clean_text = nlp_service.strip_structure(full_text)
-        clean_text = nlp_service.normalize_homoglyphs(clean_text)
-        safe_text = nlp_service.anonymize_pii(clean_text)
-
-        chunks = nlp_service.chunk_text(safe_text)
-        embeddings = nlp_service.vectorize(chunks)
-        
-        if not embeddings:
-            raise HTTPException(status_code=400, detail="El documento no tiene contenido suficiente.")
-        
-        query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
-        search_results = chroma_service.search_similar_multi(query_embeddings=query_subset, n_results=3)
-        
-        max_similitud_pct = 0.0
-        similar_projects = []
-        if search_results and "documents" in search_results and search_results["documents"]:
-            grouped_projects = {}
-            for q_idx in range(len(search_results["documents"])):
-                docs = search_results["documents"][q_idx]
-                metas = search_results["metadatas"][q_idx]
-                distances = search_results["distances"][q_idx] if "distances" in search_results else [0]*len(docs)
-                
-                for doc, meta, dist in zip(docs, metas, distances):
-                    p_id = meta.get("project_id", "Desconocido")
-                    if p_id not in grouped_projects:
-                        grouped_projects[p_id] = {"chunks": [], "min_distance": float('inf')}
-                    if doc not in grouped_projects[p_id]["chunks"]:
-                        grouped_projects[p_id]["chunks"].append(doc)
-                    if dist < grouped_projects[p_id]["min_distance"]:
-                        grouped_projects[p_id]["min_distance"] = dist
-            
-            sorted_projects = sorted(grouped_projects.items(), key=lambda x: x[1]["min_distance"])[:3]
-            for p_id, p_data in sorted_projects:
-                dist = p_data["min_distance"]
-                similitud_pct = max(0, min(100, (1.0 - dist) * 100))
-                if similitud_pct > max_similitud_pct:
-                    max_similitud_pct = similitud_pct
-                similar_projects.append({
-                    "title": p_id.upper(),
-                    "content": " ".join(p_data["chunks"][:3]),
-                    "similarity_pct": similitud_pct
-                })
-
-        # Heurística de Alineación Académica y Mensajes Dinámicos
-        words_count = len(full_text.split())
-        academic_alignment = 40 # Base
-        areas_of_improvement = []
-        positive_feedback = []
-        
-        text_lower = full_text.lower()
-        
-        # 1. Análisis de Estructura (Longitud)
-        if words_count >= 500:
-            academic_alignment += 10
-            positive_feedback.append("Formato adecuado. La longitud del documento es óptima para una propuesta inicial.")
-        else:
-            areas_of_improvement.append("El documento tiene menos de 500 palabras. Te sugerimos expandir tu marco teórico y estado del arte.")
-            
-        # Análisis de Estructura (Secciones Básicas)
-        has_intro = "introducción" in text_lower or "introduccion" in text_lower
-        has_method = "metodología" in text_lower or "metodologia" in text_lower
-        has_biblio = "bibliografía" in text_lower or "referencias" in text_lower
-        
-        if has_intro and has_method and has_biblio:
-            academic_alignment += 15
-            positive_feedback.append("Estructura impecable. Las secciones clave (Introducción, Metodología, Bibliografía) están presentes.")
-            
-        if not ("conclusiones" in text_lower or "resultados esperados" in text_lower):
-            areas_of_improvement.append("No se detectó un apartado de 'Conclusiones' o 'Resultados esperados'.")
-            
-        if not ("resumen" in text_lower or "abstract" in text_lower):
-            areas_of_improvement.append("Falta el 'Resumen' o 'Abstract' al inicio de tu documento.")
-            
-        if not ("objetivo" in text_lower):
-            areas_of_improvement.append("No se encontró una sección explícita de 'Objetivos'. Recuerda definir tu Objetivo General y Específicos.")
-        else:
-            academic_alignment += 10
-            
-        # 2. Análisis de Rigor Académico (Citas)
-        if has_biblio:
-            academic_alignment += 15
-        else:
-            areas_of_improvement.append("No se detectó la sección de 'Bibliografía'. Una propuesta sin sustento teórico puede ser rechazada.")
-            
-        import re
-        citas = re.findall(r'\[\d+\]|\(\w+,\s*\d{4}\)', full_text)
-        if len(citas) < 2 and not has_biblio:
-            areas_of_improvement.append("Se detectaron pocas menciones bibliográficas en el texto. Recuerda citar tus fuentes (APA/IEEE) en el marco teórico.")
-
-        # 3. Riesgo de Colisión (Histórico)
-        collision_risk_level = "Bajo"
-        
-        if max_similitud_pct > 50:
-            collision_risk_level = "Alto"
-            top_project = similar_projects[0]["title"].replace("PROYECTO_", "") if similar_projects else "otro proyecto"
-            areas_of_improvement.insert(0, f"Riesgo de colisión alto ({round(max_similitud_pct)}%). La idea central coincide fuertemente con el proyecto '{top_project}' de la generación anterior. ¡Cuidado con el plagio!")
-        elif max_similitud_pct > 20:
-            collision_risk_level = "Medio"
-            areas_of_improvement.insert(0, "Similitud moderada. Tu proyecto comparte tecnologías o metodologías con propuestas del semestre pasado. Asegúrate de destacar tu diferenciador.")
-        else:
-            collision_risk_level = "Bajo"
-            if max_similitud_pct < 5:
-                positive_feedback.insert(0, "Originalidad alta. No se encontraron proyectos similares en el repositorio histórico de la universidad.")
+            analysis_progress_store[user_id] = {"phase": 1, "message": "Extrayendo texto del documento..."}
+            full_text = ""
+            if filename_lower.endswith('.pdf'):
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                full_text = pymupdf4llm.to_markdown(doc)
             else:
-                positive_feedback.insert(0, "¡Excelente planteamiento! Tu propuesta tecnológica parece única frente a generaciones anteriores.")
+                full_text = file_bytes.decode('utf-8')
+
+            if not full_text or len(full_text.strip()) < 50:
+                raise Exception("El documento no parece ser una propuesta de proyecto integrador. No se pudo extraer texto.")
+
+            if nlp_service.detect_prompt_injection(full_text):
+                raise Exception("ALERTA: Se detectó un intento de inyección de prompt.")
+
+            analysis_progress_store[user_id] = {"phase": 2, "message": "Ejecutando modelo clasificador..."}
+            texto_limpio = nlp_service.strip_structure(full_text)
+            texto_limpio = nlp_service.normalize_homoglyphs(texto_limpio)
+            resultado_ml = nlp_service.clasificar_propuesta_ml(texto_limpio)
+            calidad_vocabulario_pct = resultado_ml["probabilidades"].get(resultado_ml["etiqueta"], 0.0)
+            vector_nuevo = resultado_ml["vector"]
+
+            analysis_progress_store[user_id] = {"phase": 3, "message": "Validando secciones obligatorias..."}
+            resultado_blacklist = nlp_service.validar_blacklist_extendida(full_text)
+            if not resultado_blacklist["ok"]:
+                raise Exception(f"[Filtro 2A] El documento contiene contenido no permitido ('{resultado_blacklist['palabra_bloqueada']}'). Sube tu propuesta de proyecto, no un CV o manual.")
+
+            resultado_secciones = nlp_service.validar_secciones_profesor(full_text)
+            completitud_pct = resultado_secciones["completitud_pct"]
+            if not resultado_secciones["ok"]:
+                faltantes_str = ", ".join(f"'{s}'" for s in resultado_secciones["faltantes"])
+                raise Exception(f"[Filtro 2B] Tu propuesta está incompleta. Falta información sobre: {faltantes_str}.")
+
+            resultado_coherencia = nlp_service.validar_coherencia_semantica(full_text)
+            coherencia_pct = resultado_coherencia["coherencia_pct"]
+            if not resultado_coherencia["ok"]:
+                pares_str = "; ".join(p["par"] for p in resultado_coherencia["pares_invalidos"])
+                raise Exception(f"[Filtro 3] Las secciones de tu propuesta no son coherentes entre sí ({pares_str}). Asegúrate de que el Problema, el Objetivo y la Justificación hablen del mismo proyecto.")
+
+            analysis_progress_store[user_id] = {"phase": 4, "message": "Buscando colisiones en Qdrant..."}
+            safe_text = nlp_service.anonymize_pii(texto_limpio)
+            chunks = nlp_service.chunk_text(safe_text)
+            embeddings = nlp_service.vectorize(chunks)
+
+            max_similitud_pct = 0.0
+            similar_projects = []
+            if embeddings and len(embeddings) > 0:
+                query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
+                search_results = qdrant_service.search_similar_multi(
+                    query_embeddings=query_subset, n_results=3
+                )
+                if search_results and search_results.get("documents"):
+                    grouped_projects = {}
+                    for q_idx in range(len(search_results["documents"])):
+                        docs  = search_results["documents"][q_idx]
+                        metas = search_results["metadatas"][q_idx]
+                        dists = search_results["distances"][q_idx]
+                        for doc, meta, dist in zip(docs, metas, dists):
+                            p_id = meta.get("project_id", "Desconocido")
+                            if p_id not in grouped_projects:
+                                grouped_projects[p_id] = {"chunks": [], "min_distance": float('inf')}
+                            if doc not in grouped_projects[p_id]["chunks"]:
+                                grouped_projects[p_id]["chunks"].append(doc)
+                            if dist < grouped_projects[p_id]["min_distance"]:
+                                grouped_projects[p_id]["min_distance"] = dist
+
+                    sorted_projects = sorted(grouped_projects.items(), key=lambda x: x[1]["min_distance"])[:3]
+                    for p_id, p_data in sorted_projects:
+                        dist = p_data["min_distance"]
+                        sim_factor = 1.0 - (dist / 0.4)
+                        similitud_pct = max(0, min(100, sim_factor * 100))
+                        if similitud_pct > max_similitud_pct:
+                            max_similitud_pct = similitud_pct
+                        similar_projects.append({
+                            "title": p_id.upper(),
+                            "content": " ".join(p_data["chunks"][:3]),
+                            "similarity_pct": similitud_pct
+                        })
+
+            resultado_cluster = {"cluster_id": -1, "cluster_total": 0,
+                                 "innovacion_pct": 50.0, "posicion_pct": 50.0,
+                                 "proyectos_cercanos": []}
+            if embeddings and len(embeddings) > 0:
+                vector_qdrant = np.mean(embeddings, axis=0).tolist()
+                try:
+                    resultado_cluster = clustering_engine.asignar_cluster(vector_qdrant)
+                except Exception as ce:
+                    pass
+
+            return (full_text, max_similitud_pct, similar_projects,
+                    resultado_secciones, chunks, calidad_vocabulario_pct,
+                    completitud_pct, coherencia_pct, resultado_cluster)
+
+        (full_text, max_similitud_pct, similar_projects,
+         resultado_secciones, chunks, calidad_vocabulario_pct,
+         completitud_pct, coherencia_pct, resultado_cluster) = await asyncio.to_thread(_cpu_bound)
+
+        cluster_id    = resultado_cluster.get("cluster_id", -1)
+        cluster_total = resultado_cluster.get("cluster_total", 0)
+        innovacion_pct = resultado_cluster.get("innovacion_pct", 50.0)
+
+        collision_risk_level = (
+            "Alto"  if max_similitud_pct > 50 else
+            "Medio" if max_similitud_pct > 20 else
+            "Bajo"
+        )
 
         quick_analysis = {
-            "status": "success",
-            "academic_alignment": min(100, academic_alignment),
-            "collision_risk_pct": round(max_similitud_pct, 1),
-            "collision_risk_level": collision_risk_level,
-            "positive_feedback": positive_feedback,
-            "areas_of_improvement": areas_of_improvement
+            "status"  : "success",
+            "estado"  : "APROBADO",
+            "metricas": {
+                "calidad_vocabulario_pct"  : round(calidad_vocabulario_pct, 1),
+                "completitud_formato_pct" : round(completitud_pct, 1),
+                "coherencia_semantica_pct": round(coherencia_pct, 1),
+                "innovacion_originalidad_pct": round(innovacion_pct, 1),
+            },
+            "cluster": {
+                "id"   : cluster_id,
+                "total": cluster_total,
+            },
+            "colision": {
+                "porcentaje": round(max_similitud_pct, 1),
+                "nivel"     : collision_risk_level,
+            },
+            "proyectos_similares": similar_projects,
+            "secciones_encontradas": resultado_secciones.get("encontradas", []),
+            "academic_alignment"   : round(completitud_pct, 1),
+            "collision_risk_pct"   : round(max_similitud_pct, 1),
+            "collision_risk_level" : collision_risk_level,
+            "positive_feedback"    : [
+                f"Filtro ML: {calidad_vocabulario_pct:.1f}% seguridad de que es una propuesta válida.",
+                f"Estructura completa: {len(resultado_secciones.get('encontradas', []))} secciones detectadas.",
+                f"Coherencia semántica: {coherencia_pct:.1f}% de consistencia entre Problemática, Objetivo y Justificación.",
+            ],
+            "areas_of_improvement" : [
+                f"Similitud con proyectos existentes: {max_similitud_pct:.1f}%" if max_similitud_pct > 0 else "No se encontraron colisiones con proyectos anteriores."
+            ],
         }
 
-        # Guardar Draft
+        try:
+            log_inference(
+                user_id=user_id,
+                filename=filename_real,
+                score_colision=max_similitud_pct,
+                nivel_riesgo=collision_risk_level,
+                academic_alignment=min(100, quick_analysis["academic_alignment"]),
+                secciones_opcionales=resultado_secciones.get("encontradas", []),
+                cluster_id=cluster_id,
+            )
+        except Exception as log_err:
+            pass
+
+        try:
+            from app.config.settings import settings
+            async with httpx.AsyncClient() as client:
+                await client.post(f"{settings.AUTH_SERVICE_URL}/admin/activity", json={
+                    "userId": user_id,
+                    "action": "UPLOAD_DOCUMENT",
+                    "detail": f"Proyecto: {filename_real}",
+                    "ipAddress": "127.0.0.1"
+                }, timeout=3.0)
+                
+                if collision_risk_level in ["Alto", "Medio"] or max_similitud_pct > 30:
+                    await client.post(f"{settings.AUTH_SERVICE_URL}/admin/activity", json={
+                        "userId": None,
+                        "action": "SYSTEM_ALERT",
+                        "detail": f"Riesgo {collision_risk_level} ({max_similitud_pct}%) en {filename_real}",
+                        "ipAddress": "127.0.0.1"
+                    }, timeout=3.0)
+        except Exception as e:
+            pass
+
         draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
         draft_data = {
             "chunks": chunks,
@@ -548,12 +560,20 @@ async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = Fil
         with open(draft_path, "w", encoding="utf-8") as f:
             json.dump(draft_data, f, ensure_ascii=False)
 
-        return quick_analysis
+        analysis_result_store[user_id] = quick_analysis
+        analysis_progress_store[user_id] = {"phase": 9, "message": "Pre-validación exitosa"}
 
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e).replace('Exception: ', '').replace('Exception ', '')
+        analysis_progress_store[user_id] = {"phase": -1, "message": error_msg}
+    finally:
+        active_analysis_tasks.pop(user_id, None)
+
+
+@router.get("/inference-history")
+async def inference_history(limit: int = 50, offset: int = 0):
+    
+    return get_history(limit=limit, offset=offset)
 
 @router.get("/draft-proposal/{user_id}")
 async def get_draft_proposal(user_id: str):
@@ -567,61 +587,155 @@ async def get_draft_proposal(user_id: str):
             return {"status": "not_found"}
     return {"status": "not_found"}
 
-@router.post("/analyze-draft-proposal")
-async def analyze_draft_proposal(user_id: str = Form(...)):
-    draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
-    if not os.path.exists(draft_path):
-        raise HTTPException(status_code=404, detail="No se encontró borrador para este usuario.")
-        
+@router.get("/analysis-status/{user_id}")
+async def get_analysis_status(user_id: str):
+    
+    if user_id in analysis_progress_store:
+        return analysis_progress_store[user_id]
+    return {"phase": 1, "message": "Procesando propuesta..."}
+
+async def _run_analysis_background(user_id: str, draft_path: str):
+    
     try:
-        with open(draft_path, "r", encoding="utf-8") as f:
-            draft_data = json.load(f)
-            
-        chunks = draft_data.get("chunks", [])
-        similar_projects = draft_data.get("similar_projects", [])
-        proposal_text = " ".join(chunks)
+        active_analysis_tasks[user_id] = asyncio.current_task()
         
-        if not ollama_service.check_health():
-             return {
-                 "status": "warning",
-                 "message": "Ollama no está respondiendo en localhost:11434.",
-                 "similar_projects": [p["title"] for p in similar_projects]
-             }
+        if analysis_lock.locked():
+            analysis_progress_store[user_id] = {
+                "phase": 5,
+                "message": "En cola de espera: Hay otro análisis de IA en curso. Tu turno comenzará en un momento..."
+            }
 
-        llm_verdict = ollama_service.analyze_originality(
-            proposal_text=proposal_text,
-            similar_projects=similar_projects
-        )
+        async with analysis_lock:
+            analysis_progress_store[user_id] = {"phase": 5, "message": "Calculando riesgo de colisión..."}
 
-        # Eliminar borrador tras éxito
-        try:
-            os.remove(draft_path)
-        except:
-            pass
+            with open(draft_path, "r", encoding="utf-8") as f:
+                draft_data = json.load(f)
 
-        return {
-            "status": "success",
-            "message": "Análisis completado con Phi-3 Mini",
-            "similar_projects_found": len(similar_projects),
-            "ollama_analysis": llm_verdict
-        }
+            chunks = draft_data.get("chunks", [])
+            similar_projects = draft_data.get("similar_projects", [])
+            quick_analysis = draft_data.get("quick_analysis", {})
 
+            full_proposal_text = " ".join(chunks)
+            proposal_text = full_proposal_text[:12000] if len(full_proposal_text) > 12000 else full_proposal_text
+
+            max_sim_pct = quick_analysis.get("collision_risk_pct", 0.0)
+            top_project_name = similar_projects[0]["title"] if similar_projects else "Ninguno"
+            risk_level = "Alto" if max_sim_pct > 50 else ("Medio" if max_sim_pct > 20 else "Bajo")
+
+            if not await ollama_service.check_health():
+                analysis_result_store[user_id] = {
+                    "status": "warning",
+                    "message": "El motor de IA no está disponible en este momento.",
+                    "similar_projects": [p["title"] for p in similar_projects]
+                }
+                analysis_progress_store[user_id] = {"phase": -1, "message": "El motor de IA no está disponible."}
+                return
+
+            analysis_progress_store[user_id] = {"phase": 6, "message": "El comité académico está redactando el dictamen..."}
+
+            await asyncio.sleep(0)
+            llm_verdict = await ollama_service.analyze_originality(
+                proposal_text=proposal_text,
+                similar_projects=similar_projects,
+                max_sim_pct=round(max_sim_pct, 1),
+                risk_level=risk_level,
+                project_name="PROPUESTA_DEL_ALUMNO",
+                top_project_name=top_project_name,
+            )
+
+            analysis_progress_store[user_id] = {"phase": 7, "message": "Generando recomendaciones técnicas..."}
+
+            analysis_progress_store[user_id] = {"phase": 7, "message": "Generando recomendaciones técnicas..."}
+
+            analysis_progress_store[user_id] = {"phase": 8, "message": "Afinando veredicto final..."}
+
+            final_result = {
+                "status": "success",
+                "message": "Análisis completado con Llama 3.2 3B",
+                "similar_projects_found": len(similar_projects),
+                "ollama_analysis": llm_verdict
+            }
+            analysis_result_store[user_id] = final_result
+            analysis_progress_store[user_id] = {"phase": 9, "message": "Análisis completado. Recuperando resultado..."}
+
+    except asyncio.CancelledError:
+        print(f"BACKGROUND TASK: Análisis para {user_id} cancelado explícitamente.")
+        analysis_progress_store.pop(user_id, None)
+        analysis_result_store.pop(user_id, None)
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        analysis_progress_store[user_id] = {"phase": -1, "message": f"Error en el análisis: {str(e)}"}
+    finally:
+        active_analysis_tasks.pop(user_id, None)
+
+@router.post("/analyze-draft-proposal")
+async def analyze_draft_proposal(user_id: str = Form(...)):
+    
+    draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+    if not os.path.exists(draft_path):
+        raise HTTPException(status_code=404, detail="No se encontró borrador para este usuario.")
+
+    analysis_result_store.pop(user_id, None)
+    analysis_progress_store[user_id] = {"phase": 5, "message": "Iniciando análisis en segundo plano..."}
+
+    asyncio.create_task(_run_analysis_background(user_id, draft_path))
+
+    return {
+        "status": "queued",
+        "message": "Análisis iniciado en segundo plano. Usa /analysis-status/{user_id} para seguir el progreso."
+    }
+
+@router.get("/analysis-result/{user_id}")
+async def get_analysis_result(user_id: str):
+    
+    if user_id in analysis_result_store:
+        result = analysis_result_store.pop(user_id)
+        analysis_progress_store.pop(user_id, None)
+        
+        draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+        try:
+            if os.path.exists(draft_path):
+                os.remove(draft_path)
+        except Exception:
+            pass
+            
+        return result
+
+    phase_info = analysis_progress_store.get(user_id, {})
+    if phase_info.get("phase") == -1:
+        return {"status": "error", "message": phase_info.get("message", "Error desconocido en el análisis.")}
+
+    return {"status": "pending", "message": "El análisis aún está en progreso."}
+
+@router.post("/cancel-analysis/{user_id}")
+async def cancel_analysis(user_id: str):
+    
+    task = active_analysis_tasks.get(user_id)
+    if task and not task.done():
+        task.cancel()
+        
+    analysis_progress_store.pop(user_id, None)
+    analysis_result_store.pop(user_id, None)
+    
+    draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+    try:
+        if os.path.exists(draft_path):
+            os.remove(draft_path)
+    except Exception:
+        pass
+        
+    return {"status": "success", "message": "Análisis cancelado exitosamente."}
 
 @router.post("/analyze-proposal-phi3")
 async def analyze_proposal_phi3(file: UploadFile = File(...)):
-    """
-    Ejecuta el Pipeline de 5 Fases para Análisis de Originalidad con Ollama (Phi-3 Mini).
-    """
+    
     try:
         filename_lower = file.filename.lower()
         if not filename_lower.endswith(('.pdf', '.md', '.txt')):
             raise HTTPException(status_code=400, detail="El archivo debe ser PDF, MD o TXT")
             
-        # Fase 1: Ingesta y Extracción Ligera
         file_bytes = await file.read()
         full_text = ""
         if filename_lower.endswith('.pdf'):
@@ -633,35 +747,45 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
         if not full_text:
             raise HTTPException(status_code=400, detail="No se pudo extraer texto del documento.")
 
-        # SEGURIDAD RASP: Detectar Inyección de Prompt
+        if not nlp_service.is_valid_project(full_text):
+            raise HTTPException(
+                status_code=400,
+                detail="Este documento no parece ser una propuesta de proyecto tecnológico o de software. Por favor, sube el documento correcto."
+            )
+
+        section_check = _validate_project_sections(full_text)
+        if not section_check["ok"]:
+            missing = ", ".join(f"'{s}'" for s in section_check["missing_mandatory"])
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Tu propuesta es válida, pero olvidaste incluir información sobre: {missing}. "
+                    f"Asegúrate de explicar tus objetivos, el problema que resuelves y los requerimientos técnicos."
+                )
+            )
+
         if nlp_service.detect_prompt_injection(full_text):
             raise HTTPException(status_code=403, detail="ALERTA: Se detectó un intento de inyección de prompt (Prompt Injection). El documento ha sido rechazado.")
 
-        # Fase 2: Filtrado Estructural y Anonimización (SpaCy)
         clean_text = nlp_service.strip_structure(full_text)
         
-        # SEGURIDAD RASP: Normalizar Homoglifos (evitar evasión vectorial con cirílico)
         clean_text = nlp_service.normalize_homoglyphs(clean_text)
         
         safe_text = nlp_service.anonymize_pii(clean_text)
 
-        # Fase 3: Vectorización y Persistencia (Embeddings)
         chunks = nlp_service.chunk_text(safe_text)
         embeddings = nlp_service.vectorize(chunks)
         
-        if not embeddings:
+        if embeddings is None or len(embeddings) == 0:
             raise HTTPException(status_code=400, detail="El documento no tiene contenido suficiente para vectorizar.")
         
-        # Fase 4: Búsqueda de Coincidencias Rápidas (Multi-Query K-NN en ChromaDB)
-        # Seleccionamos un máximo de 5 chunks (los más representativos) para no saturar la búsqueda
         query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
         
-        search_results = chroma_service.search_similar_multi(query_embeddings=query_subset, n_results=3)
+        search_results = qdrant_service.search_similar_multi(query_embeddings=query_subset, n_results=3)
         
         similar_projects = []
         if search_results and "documents" in search_results and search_results["documents"]:
             grouped_projects = {}
-            # Como es multi-query, search_results["documents"] es una lista de listas
             for q_idx in range(len(search_results["documents"])):
                 docs = search_results["documents"][q_idx]
                 metas = search_results["metadatas"][q_idx]
@@ -676,7 +800,6 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
                     if dist < grouped_projects[p_id]["min_distance"]:
                         grouped_projects[p_id]["min_distance"] = dist
                 
-            # Seleccionar los 3 mejores proyectos en base a la distancia mínima agregada
             sorted_projects = sorted(grouped_projects.items(), key=lambda x: x[1]["min_distance"])[:3]
             
             for p_id, p_data in sorted_projects:
@@ -685,21 +808,26 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
                 
                 similar_projects.append({
                     "title": p_id.upper(),
-                    "content": " ".join(p_data["chunks"][:3]), # Solo pasamos los 3 mejores chunks al LLM
+                    "content": " ".join(p_data["chunks"][:3]),
                     "similarity_pct": similitud_pct
                 })
 
-        # Fase 5: Análisis de Originalidad con Phi-3 Mini (Ollama)
         proposal_text = " ".join(chunks)
         
-        if not ollama_service.check_health():
+        try:
+            is_healthy = await ollama_service.check_health()
+        except Exception:
+            is_healthy = False
+            
+        if not is_healthy:
              return {
                  "status": "warning",
-                 "message": "Pipeline completado hasta Fase 4. Ollama no está respondiendo en localhost:11434.",
+                 "message": "Pipeline completado hasta Fase 4. El microservicio de LLM no está respondiendo.",
                  "similar_projects": [p["title"] for p in similar_projects]
              }
 
-        llm_verdict = ollama_service.analyze_originality(
+        llm_verdict = await asyncio.to_thread(
+            ollama_service.analyze_originality,
             proposal_text=proposal_text,
             similar_projects=similar_projects
         )
@@ -712,9 +840,21 @@ async def analyze_proposal_phi3(file: UploadFile = File(...)):
         }
 
     except HTTPException:
-        # Re-lanzar excepciones HTTP explícitas (como el 403 de Prompt Injection)
         raise
     except Exception as e:
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/admin/minimap-data")
+def minimap_data():
+    """
+    Retorna los centroides de los clústeres para animar la ubicación
+    de una inferencia en el historial de manera ligera en el Frontend.
+    """
+    try:
+        from app.services.visualization_service import visualization_service
+        data = visualization_service.get_minimap_data()
+        return data
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

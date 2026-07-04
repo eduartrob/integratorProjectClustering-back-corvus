@@ -7,7 +7,6 @@ logger = logging.getLogger(__name__)
 
 class ConfigManager:
     def __init__(self):
-        # Usamos la ruta persistente de Chroma para guardar también la configuración
         self.config_path = os.path.join(settings.CHROMA_DB_PATH, 'app_config.json')
         self._ensure_default_config()
 
@@ -15,7 +14,8 @@ class ConfigManager:
         if not os.path.exists(self.config_path):
             os.makedirs(settings.CHROMA_DB_PATH, exist_ok=True)
             default_config = {
-                "allowed_extensions": [".pdf", ".md", ".txt"]
+                "allowed_extensions": [".pdf", ".md", ".txt"],
+                "llm_provider": "ollama"
             }
             self.save_config(default_config)
 
@@ -25,7 +25,7 @@ class ConfigManager:
                 return json.load(f)
         except Exception as e:
             logger.error(f"Error leyendo config: {e}")
-            return {"allowed_extensions": [".pdf", ".md", ".txt"]}
+            return {"allowed_extensions": [".pdf", ".md", ".txt"], "llm_provider": "ollama"}
 
     def save_config(self, config_data: dict):
         try:

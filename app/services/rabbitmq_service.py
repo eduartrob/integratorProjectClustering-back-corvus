@@ -14,16 +14,14 @@ class RabbitMQService:
 
     def _connect(self):
         try:
-            # En docker-compose el broker es 'rabbitmq' y las credenciales son corvus_admin:corvus_secret
-            import os
             credentials = pika.PlainCredentials(
-                os.getenv('RABBITMQ_USER', 'corvus_admin'), 
-                os.getenv('RABBITMQ_PASS', 'corvus_secret')
+                settings.RABBITMQ_USER, 
+                settings.RABBITMQ_PASS
             )
             parameters = pika.ConnectionParameters(
-                host=os.getenv('RABBITMQ_HOST', 'rabbitmq'),
+                host=settings.RABBITMQ_HOST,
                 credentials=credentials,
-                heartbeat=0  # Deshabilitamos heartbeats para que RabbitMQ no cierre la conexión si el backend está inactivo
+                heartbeat=0
             )
             self.connection = pika.BlockingConnection(parameters)
             self.channel = self.connection.channel()
@@ -52,12 +50,11 @@ class RabbitMQService:
                     routing_key=routing_key,
                     body=json.dumps(payload),
                     properties=pika.BasicProperties(
-                        delivery_mode=2, # hacer mensaje persistente
+                        delivery_mode=2,
                     )
                 )
             except Exception as e:
                 logger.error(f"Error publicando mensaje en RabbitMQ: {str(e)}")
-                # Si la conexión se perdió sin que Pika se diera cuenta, reconectamos y reintentamos 1 vez
                 if retry:
                     logger.info("Intentando reconectar a RabbitMQ y reenviar mensaje...")
                     self._connect()

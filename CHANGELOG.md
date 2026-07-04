@@ -1,6 +1,16 @@
 # Changelog - Project Clustering Service
 
+## [0.5.0] - 2026-07-02
+### Refactorización de Arquitectura y Base de Datos
+- **Migración a Qdrant**: Se reemplazó ChromaDB por Qdrant para mejorar la velocidad y escalabilidad en la búsqueda de vectores.
+- **Flujo Desacoplado de Google Drive**: La sincronización con Drive ya no vectoriza los documentos inmediatamente. Ahora detecta, extrae el texto y los almacena localmente en una "Base de Datos de Pendientes" (`PendingProjectsDB`).
+- **Clusterización por Lotes (Batch)**: El endpoint `/admin/execute` ahora es el único responsable de tomar la cola de proyectos pendientes, generar embeddings en masa (Qdrant) y recalcular el mapa global semántico (K-Means), reduciendo la fragmentación de la memoria.
+
 ## [0.4.0] - 2026-06-26
+
+### Arquitectura y Refactorización
+- **Clustering Service Nativo**: Se refactorizó toda la lógica de machine learning (UMAP, HDBSCAN, Plotly, ChromaDB) desde el antiguo script CLI aislado (`visualize_clusters.py`) hacia un servicio interno nativo de FastAPI (`app/services/clustering_service.py`).
+- **Eliminación de Subprocess**: Se eliminó el anti-patrón de invocar el algoritmo de clustering mediante `subprocess.run()`. El endpoint `/admin/execute` ahora invoca la clase `ClusteringEngineService` directamente en memoria mediante `BackgroundTasks`, reduciendo el consumo de RAM, eliminando dependencias CLI innecesarias, e incrementando la estabilidad general del backend.
 
 ### Precisión Matemática y Vectorial (Core Engine)
 - **Cerebro Multilingüe**: Se reemplazó el modelo base de embeddings por `paraphrase-multilingual-MiniLM-L12-v2`. Esto otorga una comprensión semántica profunda de textos técnicos en español nativo, superando las limitaciones del modelo anterior enfocado en inglés.

@@ -2,19 +2,28 @@ import spacy
 import re
 import torch
 import unicodedata
+import numpy as np
+import joblib
+from pathlib import Path
 from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 import logging
 
-# Limitar PyTorch a 1 hilo de CPU para no "ahorcar" al servidor AWS
-# y permitir que FastAPI responda rápidamente al polling de progreso del celular.
+from app.core import constants
+
 torch.set_num_threads(1)
 
 logger = logging.getLogger(__name__)
 
+# ── Rutas a artefactos del modelo entrenado ────────────────────────────────
+_BASE_DIR    = Path(__file__).resolve().parent.parent.parent
+_NOTEBOOKS   = _BASE_DIR / "notebooks"
+_MODELO_PKL  = _NOTEBOOKS / "models" / "modelo_clasificacion_embeddings.pkl"
+_EMB_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
 class NLPService:
     def __init__(self):
         logger.info("Cargando modelo SentenceTransformer: paraphrase-multilingual-MiniLM-L12-v2...")
-        # Este modelo es multilingüe nativo, ideal para español, pesa ~470MB y genera vectores de 384 dimensiones
         self.encoder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
         
         logger.info("Cargando modelo de Spacy para español...")
@@ -24,48 +33,157 @@ class NLPService:
             logger.warning("No se encontró el modelo 'es_core_news_sm'. Ejecuta: python -m spacy download es_core_news_sm")
             self.nlp = None
 
+    # ── FILTRO 1: Clasificador ML entrenado ──────────────────────────────────
+    def clasificar_propuesta_ml(self, texto_limpio: str) -> dict:
+        """
+        Carga el modelo entrenado y clasifica el texto.
+        Retorna: {etiqueta, probabilidades, es_valido}
+        """
+        try:
+            emb_model = TextEmbedding(model_name=_EMB_MODEL_NAME)
+            vector = np.array(list(emb_model.embed([texto_limpio])))[0]
+            clf = joblib.load(_MODELO_PKL)
+            etiqueta = clf.predict([vector])[0]
+            probas = {}
+            try:
+                for clase, p in zip(clf.classes_, clf.predict_proba([vector])[0]):
+                    probas[clase] = round(float(p) * 100, 1)
+            except Exception:
+                pass
+            es_valido = etiqueta in constants.ETIQUETA_VALIDAS
+            logger.info(f"[Filtro 1] Clasificación ML: {etiqueta} | {probas}")
+            return {"etiqueta": etiqueta, "probabilidades": probas,
+                    "es_valido": es_valido, "vector": vector.tolist()}
+        except Exception as e:
+            logger.error(f"[Filtro 1] Error cargando modelo ML: {e}")
+            return {"etiqueta": "Desconocido", "probabilidades": {},
+                    "es_valido": True, "vector": []}  # falla abierta
+
+    # ── FILTRO 2A: Blacklist extendida ─────────────────────────────────────
+    def validar_blacklist_extendida(self, texto_crudo: str) -> dict:
+        """
+        Busca en los primeros 3000 chars del texto crudo palabras que indican
+        que el documento nunca es una propuesta.
+        Retorna: {ok, palabra_bloqueada}
+        """
+        t = texto_crudo.lower()[:3000]
+        for palabra in constants.BLACKLIST_DOCS:
+            if palabra in t:
+                logger.warning(f"[Filtro 2A] Documento bloqueado por: '{palabra}'")
+                return {"ok": False, "palabra_bloqueada": palabra}
+        return {"ok": True, "palabra_bloqueada": None}
+
+    # ── FILTRO 2B: Secciones del profesor ─────────────────────────────────
+    def validar_secciones_profesor(self, texto_crudo: str) -> dict:
+        """
+        Verifica que el documento tenga las secciones que los profesores definen.
+        Retorna: {ok, faltantes, encontradas, completitud_pct}
+        """
+        t = texto_crudo.lower()
+        # Limpiar tags HTML y formato Markdown que rompen la búsqueda de palabras clave
+        t = re.sub(r'<br\s*/?>', ' ', t)
+        t = re.sub(r'[*#_|]', ' ', t)
+        t = re.sub(r'\s+', ' ', t)
+        faltantes, encontradas = [], []
+        obligatorias_total = sum(1 for s in constants.SECCIONES_PROFESOR if s["obligatoria"])
+
+        for seccion in constants.SECCIONES_PROFESOR:
+            if any(kw in t for kw in seccion["keywords"]):
+                encontradas.append(seccion["nombre"])
+            elif seccion["obligatoria"]:
+                faltantes.append(seccion["nombre"])
+
+        obligatorias_encontradas = len([s for s in constants.SECCIONES_PROFESOR
+                                        if s["obligatoria"] and s["nombre"] in encontradas])
+        completitud_pct = round((obligatorias_encontradas / obligatorias_total) * 100, 1) if obligatorias_total else 0
+
+        return {
+            "ok": len(faltantes) == 0,
+            "faltantes": faltantes,
+            "encontradas": encontradas,
+            "completitud_pct": completitud_pct,
+        }
+
+    # ── FILTRO 3: Coherencia semántica entre secciones ─────────────────────
+    def validar_coherencia_semantica(self, texto_crudo: str) -> dict:
+        """
+        Extrae el contenido de las secciones clave, las vectoriza y calcula
+        similitud coseno entre Problema, Objetivo y Justificación.
+        Retorna: {ok, coherencia_pct, pares_invalidos, detalles}
+        """
+        t = texto_crudo.lower()
+        contenidos = {}
+
+        for nombre_sec, anchors in constants.ANCHORS_COHERENCIA.items():
+            inicio = None
+            for kw in anchors:
+                pos = t.find(kw)
+                if pos != -1:
+                    inicio = pos + len(kw)
+                    break
+            if inicio is None:
+                continue
+            fin = len(t)
+            for otro_kw in constants.TODOS_LOS_ANCHORS:
+                pos = t.find(otro_kw, inicio + 1)
+                if pos != -1 and pos < fin:
+                    fin = pos
+            contenido = re.sub(r'\s+', ' ', texto_crudo[inicio:fin]).strip()
+            if len(contenido) >= constants.MIN_CHARS_SECCION:
+                contenidos[nombre_sec] = contenido[:800]
+
+        if len(contenidos) < 2:
+            return {"ok": True, "coherencia_pct": 100.0,
+                    "pares_invalidos": [], "detalles": ["No se extrajo contenido suficiente para evaluar coherencia (se omite)"]}
+
+        try:
+            emb_model = TextEmbedding(model_name=_EMB_MODEL_NAME)
+            vectores = {}
+            for nombre, texto in contenidos.items():
+                vectores[nombre] = np.array(list(emb_model.embed([texto])))[0]
+        except Exception as e:
+            logger.warning(f"[Filtro 3] Error vectorizando secciones: {e}")
+            return {"ok": True, "coherencia_pct": 100.0, "pares_invalidos": [], "detalles": []}
+
+        pares = [("Problema", "Objetivo"), ("Problema", "Justificación"), ("Objetivo", "Justificación")]
+        pares_invalidos, sims, detalles = [], [], []
+
+        for (sec_a, sec_b) in pares:
+            if sec_a not in vectores or sec_b not in vectores:
+                detalles.append(f"{sec_a} ↔ {sec_b}: contenido insuficiente (omitido)")
+                continue
+            v1, v2 = vectores[sec_a], vectores[sec_b]
+            den = np.linalg.norm(v1) * np.linalg.norm(v2)
+            sim = float(np.dot(v1, v2) / den) if den > 0 else 0.0
+            sims.append(sim)
+            if sim < constants.COHERENCIA_UMBRAL:
+                detalles.append(f"{sec_a} ↔ {sec_b}: {sim:.2f} (INCOHERENTE)")
+                pares_invalidos.append({"par": f"{sec_a} ↔ {sec_b}", "similitud": round(sim, 3)})
+            else:
+                detalles.append(f"{sec_a} ↔ {sec_b}: {sim:.2f} (OK)")
+
+        coherencia_pct = round(float(np.mean(sims)) * 100, 1) if sims else 100.0
+        return {
+            "ok": len(pares_invalidos) == 0,
+            "coherencia_pct": coherencia_pct,
+            "pares_invalidos": pares_invalidos,
+            "detalles": detalles,
+        }
+
+    # ── Mantener compatibilidad con código viejo que llame is_valid_project ─
     def is_valid_project(self, text: str) -> bool:
-        """
-        Filtro Heurístico para detectar si el documento es basura (currículums, manuales, etc.)
-        """
-        text_lower = text.lower()
-        
-        # Palabras comunes en documentos que NO queremos procesar
-        black_list = ["currículum", "curriculum vitae", "experiencia laboral", "autoevaluación", "manual de usuario", "manual de mantenimiento"]
-        for word in black_list:
-            # Buscamos en los primeros 2000 caracteres (portada/intro)
-            if word in text_lower[:2000]:
-                logger.warning(f"Documento rechazado por contener palabra bloqueada: {word}")
-                return False
-                
-        # Palabras requeridas en un proyecto de investigación o software
-        white_list = [
-            "resumen", "abstract", "introducción", "conclusión", "objetivo", "metodología", "proyecto", "investigación",
-            "sistema", "plataforma", "aplicación", "software", "desarrollo", "base de datos", "ecommerce", "web", "app"
-        ]
-        match_count = sum(1 for word in white_list if word in text_lower)
-        
-        # Debe tener al menos 1 palabra clave académica o técnica
-        if match_count < 1:
-            logger.warning("Documento rechazado por falta de vocabulario académico o técnico.")
-            return False
-            
-        return True
+        """Deprecated: usar validar_blacklist_extendida() + validar_secciones_profesor()."""
+        result = self.validar_blacklist_extendida(text)
+        return result["ok"]
 
     def anonymize_pii(self, text: str) -> str:
-        """
-        Detecta y censura nombres de personas (PII) usando Spacy NER.
-        Reemplaza los nombres propios con [ALUMNO_ANONIMO].
-        """
+        
         if self.nlp is None or not text:
             return text
             
-        # Spacy tiene un límite de longitud de texto por defecto (1,000,000 caracteres).
-        # Lo procesaremos completo.
         doc = self.nlp(text)
         anonymized_text = text
         
-        # Procesamos las entidades en reversa para no desfasar los índices al reemplazar
         for ent in reversed(doc.ents):
             if ent.label_ == "PER":
                 start, end = ent.start_char, ent.end_char
@@ -74,36 +192,22 @@ class NLPService:
         return anonymized_text
 
     def strip_structure(self, text: str) -> str:
-        """
-        Elimina los encabezados y etiquetas de estructura de la plantilla institucional
-        antes de vectorizar. Garantiza que el modelo neuronal compare CONTENIDO
-        puro — sin secciones boilerplate idénticas en todos los proyectos.
-
-        CRÍTICO: Llamar ANTES de anonymize_pii() para que los regex de bibliografía
-        y nombres de sección funcionen sobre el texto original.
-        """
+        
         if not text:
             return text
 
-        # 1. Eliminar SECCIONES COMPLETAS de boilerplate (header + su contenido).
-        #    Estas secciones son idénticas en TODOS los proyectos — son ruido puro.
         sections_to_remove = [
-            r'##\s*¿Por qué elegir este proyecto\?.*?(?=\n##|\Z)',   # Párrafo de marketing idéntico
+            r'##\s*¿Por qué elegir este proyecto\?.*?(?=\n##|\Z)',
             r'##\s*Por qué elegir este proyecto.*?(?=\n##|\Z)',
-            r'##\s*Informaci[oó]n del Equipo.*?(?=\n##|\Z)',          # Nombres y matrículas
+            r'##\s*Informaci[oó]n del Equipo.*?(?=\n##|\Z)',
             r'##\s*Información de la Propuesta.*?(?=\n##|\Z)',
-            r'##\s*(Bibliograf[ií]a|Referencias|Bibliography).*?(?=\n##|\Z)',  # Bibliografía
+            r'##\s*(Bibliograf[ií]a|Referencias|Bibliography).*?(?=\n##|\Z)',
         ]
         for pattern in sections_to_remove:
             text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
 
-        # 2. Eliminar encabezados Markdown en MAYÚSCULAS (## TÍTULO COMPLETO)
         text = re.sub(r'^#{1,4}\s+[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s/()\-]+$', '', text, flags=re.MULTILINE)
 
-        # 3. Eliminar los labels de sección genéricos de la plantilla (mixed-case)
-        #    Solo el header label, el contenido debajo se preserva.
-        #    NOTA: 'Stack Tecnológico' NO se elimina — es la sección más discriminativa
-        #    y el TF-IDF necesita esas palabras técnicas únicas para separar proyectos.
         generic_headers = [
             r'^#{1,4}\s+Descripci[oó]n del Proyecto\s*$',
             r'^#{1,4}\s+Caracter[ií]sticas Principales\s*$',
@@ -111,16 +215,10 @@ class NLPService:
         for pattern in generic_headers:
             text = re.sub(pattern, '', text, flags=re.MULTILINE | re.IGNORECASE)
 
-        # 3b. Eliminar el título H1 principal del documento (# Título del proyecto)
-        #     El título suele tener palabras genéricas ('Memoria', 'Gestión', 'Sistema')
-        #     que contaminan la comparación semántica con proyectos distintos.
         text = re.sub(r'^#\s+.+$', '', text, flags=re.MULTILINE)
 
-        # 3c. Limpieza específica para PDFs extraídos de plantillas institucionales de Word
-        #     Eliminar bloque de información del equipo
         text = re.sub(r'INFORMACI[OÓ]N DEL EQUIPO DE TRABAJO.*?INFORMACI[OÓ]N DE LA PROPUESTA.*?\n', '', text, flags=re.IGNORECASE | re.DOTALL)
         
-        # Eliminar restos de tablas de PDF con saltos de línea irregulares
         anomalias = [
             r'NOMBRE DEL\s*\n\s*PROYECTO',
             r'Corvus: Aplicación Móvil de Gestión de Memoria Histórica.*?\.', # Elimina el título específico para evitar anclaje a "Memoria"
@@ -135,25 +233,23 @@ class NLPService:
         for patron in anomalias:
             text = re.sub(patron, '', text, flags=re.IGNORECASE | re.DOTALL)
 
-        # 4. Eliminar etiquetas de metadatos en negrita (**Categoría:** Videojuegos)
         text = re.sub(r'\*\*(Categoría|Grupo de Similitud|Nivel de Dificultad).*?\n', '\n', text, flags=re.IGNORECASE)
 
-        # 5. Eliminar separadores horizontales (--- o ===)
         text = re.sub(r'^[-=]{3,}$', '', text, flags=re.MULTILINE)
 
-        # 6. Eliminar líneas de datos administrativos (matrículas)
+        # Remover formato de tablas Markdown generado por pymupdf4llm
+        text = re.sub(r'\|\s*[-:]+\s*\|(\s*[-:]+\s*\|)*', '\n', text)
+        text = re.sub(r'\|', ' ', text)
+
         text = re.sub(r'^.*[Mm]atrícula:.*\d+.*$', '', text, flags=re.MULTILINE)
 
-        # 7. Colapsar líneas en blanco excesivas
         text = re.sub(r'\n{3,}', '\n\n', text)
 
         logger.debug(f"[strip_structure] Texto limpiado: {len(text)} chars")
         return text.strip()
 
     def detect_prompt_injection(self, text: str) -> bool:
-        """
-        Retorna True si detecta patrones comunes de prompt injection.
-        """
+        
         text_lower = text.lower()
         patterns = [
             r"ignora.*instrucciones",
@@ -170,29 +266,19 @@ class NLPService:
         return False
 
     def normalize_homoglyphs(self, text: str) -> str:
-        """
-        Normaliza caracteres raros para evitar evasión vectorial (ataque de homoglifos).
-        """
+        
         if not text:
             return ""
-        # Normalización Unicode NFKD separa caracteres compuestos
         normalized = unicodedata.normalize('NFKD', text)
-        # Remover bloques de caracteres comúnmente usados para evasión (ej. Cirílico)
-        # Cirílico básico y suplementos: \u0400-\u04FF, \u0500-\u052F
         clean_text = re.sub(r'[\u0400-\u04FF\u0500-\u052F\u2D00-\u2D2F\uA640-\uA69F]', '', normalized)
         return clean_text
 
     def chunk_text(self, text: str, max_words: int = 150) -> list[str]:
-        """
-        Divide el texto en pequeños fragmentos (chunks) usando cortes de Markdown (# Títulos)
-        para preservar la semántica estructural perfecta, y subdivide si la sección es muy larga.
-        """
+        
         if not text or not text.strip():
             return []
 
         chunks = []
-        # Expresión regular para separar el texto cada vez que haya un Título Markdown o tabla grande
-        # Separamos por saltos seguidos de # o saltos bruscos.
         sections = re.split(r'\n(?=#+ )', text)
 
         for section in sections:
@@ -200,15 +286,11 @@ class NLPService:
             if not section:
                 continue
                 
-            # Contamos las palabras de la sección
             words = section.split()
             if len(words) <= max_words:
                 chunks.append(section)
             else:
-                # Si la sección (ej. toda la metodología) es gigante, usamos Spacy para partirla
-                # de manera suave sin romper oraciones.
                 if self.nlp is None:
-                    # Fallback sin Spacy
                     for i in range(0, len(words), max_words):
                         chunks.append(" ".join(words[i:i+max_words]))
                 else:
@@ -229,20 +311,13 @@ class NLPService:
         return chunks
 
     def vectorize(self, texts: list[str]) -> list[list[float]]:
-        """
-        Convierte una lista de textos (chunks) en una lista de vectores (embeddings).
-        Aplica limpieza de estructura antes de vectorizar para que la IA compare
-        solo el contenido técnico, no los títulos de la plantilla.
-        """
+        
         if not texts:
             return []
         
-        # Limpiamos la estructura antes de vectorizar
         clean_texts = [self.strip_structure(t) for t in texts]
         
-        # encode() devuelve un array de numpy o tensores, lo pasamos a lista nativa
         embeddings = self.encoder.encode(clean_texts, convert_to_numpy=True)
         return embeddings.tolist()
 
-# Instancia global (Singleton) para no recargar la IA en cada petición
 nlp_service = NLPService()

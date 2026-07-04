@@ -8,26 +8,20 @@ logger = logging.getLogger(__name__)
 class ChromaService:
     def __init__(self):
         logger.info(f"Iniciando ChromaDB en: {settings.CHROMA_DB_PATH}")
-        # Inicializamos el cliente persistente para guardar en disco local (cero costos de nube)
         self.client = chromadb.PersistentClient(path=settings.CHROMA_DB_PATH)
         
-        # Usaremos la métrica "cosine" (Coseno) que es excelente para medir similitud de textos
         self.collection = self.client.get_or_create_collection(
             name="integrator_projects",
             metadata={"hnsw:space": "cosine"}
         )
 
     def add_vectors(self, project_id: str, texts: list[str], embeddings: list[list[float]], url_drive: str, semestre: str = "historico"):
-        """
-        Guarda los vectores en ChromaDB atados a su texto original y su URL.
-        """
+        
         if not texts or not embeddings:
             return
             
-        # Generamos IDs únicos para cada fragmento del proyecto
         ids = [f"{project_id}_chunk_{i}" for i in range(len(texts))]
         
-        # Guardamos metadatos para poder recuperarlos después sin tener el PDF físico
         metadatas = [{"project_id": project_id, "url": url_drive, "chunk_index": i, "semestre": semestre} for i in range(len(texts))]
 
         logger.info(f"Guardando {len(texts)} vectores para el proyecto {project_id}...")
@@ -39,9 +33,7 @@ class ChromaService:
         )
 
     def search_similar_multi(self, query_embeddings: list[list[float]], n_results: int = 5):
-        """
-        Realiza una búsqueda multi-query con varios fragmentos a la vez.
-        """
+        
         results = self.collection.query(
             query_embeddings=query_embeddings,
             n_results=n_results
@@ -49,10 +41,7 @@ class ChromaService:
         return results
     
     def get_all_embeddings(self):
-        """
-        Extrae todos los vectores para poder correr los algoritmos de Scikit-Learn
-        y encontrar Océanos Azules.
-        """
+        
         return self.collection.get(include=["embeddings", "metadatas", "documents"])
 
 chroma_service = ChromaService()

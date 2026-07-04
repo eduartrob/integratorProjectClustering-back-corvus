@@ -1,0 +1,213 @@
+{
+  "info": {
+    "name": "Corvus — Clustering Microservice",
+    "description": "Colección de pruebas para el microservicio de clustering de proyectos integradores de Corvus.\nCubre los casos mínimos requeridos por el reporte de Minería de Datos:\n  1. Pre-validación válida (200)\n  2. Análisis final con veredicto IA (200)\n  3. Historial de inferencias paginado (200)\n  4. Archivo sin secciones mandatorias (400 - sección faltante)\n  5. Request sin archivo (422 - campo requerido)\n\nBase URL: http://207.180.215.71:3000/api/v1/clustering",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "corvus-clustering-v1"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://207.180.215.71:3000/api/v1/clustering",
+      "type": "string",
+      "description": "URL base del microservicio de clustering (producción Contabo)"
+    },
+    {
+      "key": "user_id",
+      "value": "test_alumno_001",
+      "type": "string",
+      "description": "ID de usuario para pruebas"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Pre-validación — Proyecto válido (200 OK)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/pre-validate-proposal",
+          "host": ["{{base_url}}"],
+          "path": ["pre-validate-proposal"]
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "user_id",
+              "value": "{{user_id}}",
+              "type": "text",
+              "description": "ID del alumno que sube la propuesta"
+            },
+            {
+              "key": "file",
+              "type": "file",
+              "src": "edu_deteccion_dislexia_primaria.md",
+              "description": "PDF o MD con Objetivo General, Justificación y Alcance"
+            }
+          ]
+        },
+        "description": "Envía un proyecto con la estructura completa (Objetivo General, Justificación, Alcance).\nEspera HTTP 200 con academic_alignment > 0 y collision_risk_level definido."
+      },
+      "response": [
+        {
+          "name": "200 — Análisis exitoso",
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"status\": \"success\",\n  \"academic_alignment\": 80,\n  \"collision_risk_pct\": 12.5,\n  \"collision_risk_level\": \"Bajo\",\n  \"positive_feedback\": [\"Originalidad alta. No se encontraron proyectos similares.\"],\n  \"areas_of_improvement\": []\n}"
+        }
+      ]
+    },
+    {
+      "name": "2. Análisis Final con Veredicto IA (200 OK)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/analyze-proposal-phi3",
+          "host": ["{{base_url}}"],
+          "path": ["analyze-proposal-phi3"]
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "user_id",
+              "value": "{{user_id}}",
+              "type": "text"
+            },
+            {
+              "key": "file",
+              "type": "file",
+              "src": "edu_deteccion_dislexia_primaria.md",
+              "description": "Mismo archivo para análisis profundo con LLM"
+            }
+          ]
+        },
+        "description": "Ejecuta el análisis completo con Ollama LLM. Puede tardar 30-90 segundos.\nEspera HTTP 200 con indice_innovacion, riesgo_colision y recomendaciones_ia."
+      },
+      "response": [
+        {
+          "name": "200 — Veredicto IA completo",
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"indice_innovacion\": 85,\n  \"metricas_calidad\": {\"rigor_academico\": 78, \"relevancia_tecnica\": 82},\n  \"riesgo_colision\": {\"porcentaje\": 12, \"nivel\": \"Bajo\"},\n  \"recomendaciones_ia\": [{\"titulo\": \"Enfoque Innovador\", \"descripcion\": \"...\"}]\n}"
+        }
+      ]
+    },
+    {
+      "name": "3. Historial de Inferencias — Paginado (200 OK)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/inference-history?limit=10&offset=0",
+          "host": ["{{base_url}}"],
+          "path": ["inference-history"],
+          "query": [
+            { "key": "limit",  "value": "10",  "description": "Máximo de registros por página" },
+            { "key": "offset", "value": "0",   "description": "Desplazamiento para paginación" }
+          ]
+        },
+        "description": "Devuelve el historial paginado de todas las inferencias registradas.\nEspera HTTP 200 con total, limit, offset e items[]."
+      },
+      "response": [
+        {
+          "name": "200 — Historial paginado",
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"total\": 42,\n  \"limit\": 10,\n  \"offset\": 0,\n  \"items\": [\n    {\n      \"id\": 1,\n      \"user_id\": \"test_alumno_001\",\n      \"timestamp\": 1751234567.89,\n      \"filename\": \"mi_propuesta.pdf\",\n      \"score_colision\": 12.5,\n      \"nivel_riesgo\": \"Bajo\",\n      \"academic_alignment\": 80\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "4. Archivo sin secciones mandatorias (400 Bad Request)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/pre-validate-proposal",
+          "host": ["{{base_url}}"],
+          "path": ["pre-validate-proposal"]
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "user_id",
+              "value": "{{user_id}}",
+              "type": "text"
+            },
+            {
+              "key": "file",
+              "type": "file",
+              "src": "cv_ejemplo.txt",
+              "description": "Archivo que NO contiene Objetivo General, Justificación ni Alcance"
+            }
+          ]
+        },
+        "description": "Envía un documento inválido (sin las secciones mandatorias).\nEspera HTTP 400 con detalle de qué sección falta."
+      },
+      "response": [
+        {
+          "name": "400 — Sección mandatoria faltante",
+          "status": "Bad Request",
+          "code": 400,
+          "body": "{\n  \"detail\": \"El documento no parece ser una propuesta de proyecto integrador válida.\\nSección obligatoria faltante: Objetivo General.\\n\\nPor favor verifica que subiste el archivo correcto.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "5. Sin archivo adjunto (422 Unprocessable Entity)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/pre-validate-proposal",
+          "host": ["{{base_url}}"],
+          "path": ["pre-validate-proposal"]
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "user_id",
+              "value": "{{user_id}}",
+              "type": "text"
+            }
+          ]
+        },
+        "description": "Envía el request sin el campo 'file' requerido.\nEspera HTTP 422 de FastAPI por validación de schema."
+      },
+      "response": [
+        {
+          "name": "422 — Campo file requerido",
+          "status": "Unprocessable Entity",
+          "code": 422,
+          "body": "{\n  \"detail\": [\n    {\n      \"loc\": [\"body\", \"file\"],\n      \"msg\": \"field required\",\n      \"type\": \"value_error.missing\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "6. Consultar Draft guardado (200 OK)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/draft-proposal/{{user_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["draft-proposal", "{{user_id}}"]
+        },
+        "description": "Recupera el último análisis rápido del usuario sin re-procesar el archivo.\nÚtil para que la app móvil recupere el análisis tras reinicio."
+      },
+      "response": [
+        {
+          "name": "200 — Draft encontrado",
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"status\": \"success\",\n  \"academic_alignment\": 80,\n  \"collision_risk_pct\": 12.5,\n  \"collision_risk_level\": \"Bajo\"\n}"
+        }
+      ]
+    }
+  ]
+}
