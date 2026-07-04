@@ -36,6 +36,11 @@ class ClusteringEngineService:
         self._df_eco      = None   # ecosistema de proyectos
         self._embeddings  = None   # vectores del ecosistema (numpy)
         self._kmeans      = None   # modelo K-Means entrenado
+        
+        # Métricas de deriva (Drift Monitoring)
+        self.total_new_projects = 0
+        self.sse_anomalies_count = 0
+        
         self._pca         = None   # PCA 2D para visualización
         self._embeddings_2d = None
         self.is_running   = False
@@ -149,6 +154,16 @@ class ClusteringEngineService:
         else:
             radio = dist_nuevo if dist_nuevo > 0 else 1.0
 
+        # Monitoreo de Deriva (Drift)
+        self.total_new_projects += 1
+        if dist_nuevo > (radio * 1.5):
+            self.sse_anomalies_count += 1
+            logger.warning(f"⚠️ Anomalía SSE detectada. Distancia: {dist_nuevo:.2f} (Radio: {radio:.2f})")
+            
+        tasa_anomalia = (self.sse_anomalies_count / self.total_new_projects) * 100
+        if tasa_anomalia >= 15.0 and self.total_new_projects >= 3:
+            logger.warning(f"⚠️ ALERTA DE DERIVA: Tasa de anomalías alcanzó {tasa_anomalia:.1f}%. Se recomienda ejecutar el Clustering Global.")
+
         posicion_pct   = round(min((dist_nuevo / radio) * 100, 100), 1) if radio > 0 else 0.0
         innovacion_pct = round(100 - posicion_pct, 1)
 
@@ -187,6 +202,11 @@ class ClusteringEngineService:
             
         self.is_running = True
         self.last_error = None
+        
+        # Resetear métricas de deriva
+        self.total_new_projects = 0
+        self.sse_anomalies_count = 0
+        
         try:
             logger.info("[Clustering] Iniciando Clustering Global...")
             
@@ -322,6 +342,24 @@ class ClusteringEngineService:
     def find_blue_oceans(self, *args, **kwargs):
         """Deprecated: la métrica de innovación viene de asignar_cluster()['innovacion_pct']."""
         return {"is_blue_ocean": False, "main_finding": "Usar asignar_cluster() para obtener métricas."}
+
+    def get_drift_metrics(self) -> dict:
+        """
+        Retorna las métricas actuales de deriva para el dashboard de administración.
+        """
+        drift_rate = 0.0
+        if self.total_new_projects > 0:
+            drift_rate = round((self.sse_anomalies_count / self.total_new_projects) * 100, 2)
+            
+        is_alert = drift_rate >= 15.0 and self.total_new_projects >= 3
+        
+        return {
+            "total_new_projects": self.total_new_projects,
+            "sse_anomalies_count": self.sse_anomalies_count,
+            "drift_rate_pct": drift_rate,
+            "status": "alert" if is_alert else "normal",
+            "message": "Se recomienda ejecutar Clustering Global." if is_alert else "Ecosistema estable."
+        }
 
     def find_blue_oceans_hybrid(self, *args, **kwargs):
         """Deprecated."""

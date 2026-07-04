@@ -587,6 +587,13 @@ async def get_draft_proposal(user_id: str):
             return {"status": "not_found"}
     return {"status": "not_found"}
 
+@router.get("/drift-metrics")
+async def get_drift_metrics():
+    """
+    Retorna las métricas actuales de deriva y cuenta de proyectos nuevos.
+    """
+    return clustering_engine.get_drift_metrics()
+
 @router.get("/analysis-status/{user_id}")
 async def get_analysis_status(user_id: str):
     if user_id in analysis_progress_store:
