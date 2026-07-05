@@ -124,8 +124,15 @@ class NLPService:
                         
                 # Si tampoco está en constants.py (es una sección totalmente nueva), usamos su propio nombre como keyword
                 if not kws and seccion_nombre.strip():
-                    kws = [seccion_nombre.lower().strip()]
-                    logger.debug(f"[Filtro 2B] Sección personalizada '{seccion_nombre}' → usando su nombre como keyword única")
+                    base_kw = seccion_nombre.lower().strip()
+                    # Generar versión sin tildes
+                    no_accents_kw = ''.join(c for c in unicodedata.normalize('NFD', base_kw) if unicodedata.category(c) != 'Mn')
+                    
+                    kws = [base_kw]
+                    if no_accents_kw != base_kw:
+                        kws.append(no_accents_kw)
+                        
+                    logger.debug(f"[Filtro 2B] Sección personalizada '{seccion_nombre}' → usando keywords: {kws}")
 
             if any(kw.lower() in t for kw in kws):
                 encontradas.append(seccion_nombre)
