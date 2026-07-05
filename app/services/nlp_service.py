@@ -121,6 +121,11 @@ class NLPService:
                         kws = const_kws
                         logger.debug(f"[Filtro 2B] Sección '{seccion_nombre}' sin keywords → usando fallback de constants: {const_nombre}")
                         break
+                        
+                # Si tampoco está en constants.py (es una sección totalmente nueva), usamos su propio nombre como keyword
+                if not kws and seccion_nombre.strip():
+                    kws = [seccion_nombre.lower().strip()]
+                    logger.debug(f"[Filtro 2B] Sección personalizada '{seccion_nombre}' → usando su nombre como keyword única")
 
             if any(kw.lower() in t for kw in kws):
                 encontradas.append(seccion_nombre)
