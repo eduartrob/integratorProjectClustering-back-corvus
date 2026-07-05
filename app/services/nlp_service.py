@@ -2,12 +2,26 @@ import spacy
 import re
 import torch
 import unicodedata
+import numpy as np
+import joblib
+from pathlib import Path
 from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 import logging
+
+from app.core import constants
+from app.core.config_manager import config_manager
+
 
 torch.set_num_threads(1)
 
 logger = logging.getLogger(__name__)
+
+# ── Rutas a artefactos del modelo entrenado ────────────────────────────────
+_BASE_DIR    = Path(__file__).resolve().parent.parent.parent
+_NOTEBOOKS   = _BASE_DIR / "notebooks"
+_MODELO_PKL  = _NOTEBOOKS / "models" / "modelo_clasificacion_embeddings.pkl"
+_EMB_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 class NLPService:
     def __init__(self):
@@ -21,18 +35,192 @@ class NLPService:
             logger.warning("No se encontró el modelo 'es_core_news_sm'. Ejecuta: python -m spacy download es_core_news_sm")
             self.nlp = None
 
+    # ── FILTRO 1: Clasificador ML entrenado ──────────────────────────────────
+    def clasificar_propuesta_ml(self, texto_limpio: str) -> dict:
+        """
+        Carga el modelo entrenado y clasifica el texto.
+        Retorna: {etiqueta, probabilidades, es_valido}
+        """
+        try:
+            emb_model = TextEmbedding(model_name=_EMB_MODEL_NAME)
+            vector = np.array(list(emb_model.embed([texto_limpio])))[0]
+            clf = joblib.load(_MODELO_PKL)
+            etiqueta = clf.predict([vector])[0]
+            probas = {}
+            try:
+                for clase, p in zip(clf.classes_, clf.predict_proba([vector])[0]):
+                    probas[clase] = round(float(p) * 100, 1)
+            except Exception:
+                pass
+            es_valido = etiqueta in constants.ETIQUETA_VALIDAS
+            logger.info(f"[Filtro 1] Clasificación ML: {etiqueta} | {probas}")
+            return {"etiqueta": etiqueta, "probabilidades": probas,
+                    "es_valido": es_valido, "vector": vector.tolist()}
+        except Exception as e:
+            logger.error(f"[Filtro 1] Error cargando modelo ML: {e}")
+            return {"etiqueta": "Desconocido", "probabilidades": {},
+                    "es_valido": True, "vector": []}  # falla abierta
+
+    # ── FILTRO 2A: Blacklist extendida ─────────────────────────────────────
+    def validar_blacklist_extendida(self, texto_crudo: str) -> dict:
+        """
+        Busca en los primeros 3000 chars del texto crudo palabras que indican
+        que el documento nunca es una propuesta.
+        Retorna: {ok, palabra_bloqueada}
+        """
+        t = texto_crudo.lower()[:3000]
+        for palabra in constants.BLACKLIST_DOCS:
+            if palabra in t:
+                logger.warning(f"[Filtro 2A] Documento bloqueado por: '{palabra}'")
+                return {"ok": False, "palabra_bloqueada": palabra}
+                
+        exclusion_rules = config_manager.get_exclusion_rules()
+        for rule in exclusion_rules:
+            if rule.lower() in t:
+                logger.warning(f"[Filtro 2A] Documento bloqueado por tema/cluster excluido: '{rule}'")
+                return {"ok": False, "palabra_bloqueada": rule}
+                
+        return {"ok": True, "palabra_bloqueada": None}
+
+    # ── FILTRO 2B: Secciones del profesor ─────────────────────────────────
+    def validar_secciones_profesor(self, texto_crudo: str) -> dict:
+        """
+        Verifica que el documento tenga las secciones que los profesores definen.
+        Retorna: {ok, faltantes, encontradas, completitud_pct}
+        """
+        t = texto_crudo.lower()
+        # Limpiar tags HTML y formato Markdown que rompen la búsqueda de palabras clave
+        t = re.sub(r'<br\s*/?>', ' ', t)
+        t = re.sub(r'[*#_|]', ' ', t)
+        t = re.sub(r'\s+', ' ', t)
+        faltantes, encontradas = [], []
+        
+        project_sections = config_manager.get_project_sections()
+        
+        if not project_sections:
+            return {
+                "ok": True,
+                "faltantes": [],
+                "encontradas": [],
+                "completitud_pct": 100.0,
+            }
+
+        # Construir lookup de keywords por nombre de sección desde constants.py (fallback)
+        _constants_lookup = {s["nombre"]: s["keywords"] for s in constants.SECCIONES_PROFESOR}
+
+        obligatorias_total = sum(1 for s in project_sections if s.get("obligatoria", False))
+
+        for seccion in project_sections:
+            seccion_nombre = seccion.get("nombre", "")
+            kws = seccion.get("keywords", [])
+
+            # Si el profe no definió keywords, buscar en constants.py por nombre similar
+            if not kws:
+                for const_nombre, const_kws in _constants_lookup.items():
+                    if const_nombre.lower() in seccion_nombre.lower() or seccion_nombre.lower() in const_nombre.lower():
+                        kws = const_kws
+                        logger.debug(f"[Filtro 2B] Sección '{seccion_nombre}' sin keywords → usando fallback de constants: {const_nombre}")
+                        break
+                        
+                # Si tampoco está en constants.py (es una sección totalmente nueva), usamos su propio nombre como keyword
+                if not kws and seccion_nombre.strip():
+                    base_kw = seccion_nombre.lower().strip()
+                    # Generar versión sin tildes
+                    no_accents_kw = ''.join(c for c in unicodedata.normalize('NFD', base_kw) if unicodedata.category(c) != 'Mn')
+                    
+                    kws = [base_kw]
+                    if no_accents_kw != base_kw:
+                        kws.append(no_accents_kw)
+                        
+                    logger.debug(f"[Filtro 2B] Sección personalizada '{seccion_nombre}' → usando keywords: {kws}")
+
+            if any(kw.lower() in t for kw in kws):
+                encontradas.append(seccion_nombre)
+            elif seccion.get("obligatoria", False):
+                faltantes.append(seccion_nombre)
+
+        obligatorias_encontradas = len([s for s in project_sections
+                                        if s.get("obligatoria", False) and s.get("nombre", "") in encontradas])
+        completitud_pct = round((obligatorias_encontradas / obligatorias_total) * 100, 1) if obligatorias_total > 0 else 100.0
+
+        return {
+            "ok": len(faltantes) == 0,
+            "faltantes": faltantes,
+            "encontradas": encontradas,
+            "completitud_pct": completitud_pct,
+        }
+
+    # ── FILTRO 3: Coherencia semántica entre secciones ─────────────────────
+    def validar_coherencia_semantica(self, texto_crudo: str) -> dict:
+        """
+        Extrae el contenido de las secciones clave, las vectoriza y calcula
+        similitud coseno entre Problema, Objetivo y Justificación.
+        Retorna: {ok, coherencia_pct, pares_invalidos, detalles}
+        """
+        t = texto_crudo.lower()
+        contenidos = {}
+
+        for nombre_sec, anchors in constants.ANCHORS_COHERENCIA.items():
+            inicio = None
+            for kw in anchors:
+                pos = t.find(kw)
+                if pos != -1:
+                    inicio = pos + len(kw)
+                    break
+            if inicio is None:
+                continue
+            fin = len(t)
+            for otro_kw in constants.TODOS_LOS_ANCHORS:
+                pos = t.find(otro_kw, inicio + 1)
+                if pos != -1 and pos < fin:
+                    fin = pos
+            contenido = re.sub(r'\s+', ' ', texto_crudo[inicio:fin]).strip()
+            if len(contenido) >= constants.MIN_CHARS_SECCION:
+                contenidos[nombre_sec] = contenido[:800]
+
+        if len(contenidos) < 2:
+            return {"ok": True, "coherencia_pct": 100.0,
+                    "pares_invalidos": [], "detalles": ["No se extrajo contenido suficiente para evaluar coherencia (se omite)"]}
+
+        try:
+            emb_model = TextEmbedding(model_name=_EMB_MODEL_NAME)
+            vectores = {}
+            for nombre, texto in contenidos.items():
+                vectores[nombre] = np.array(list(emb_model.embed([texto])))[0]
+        except Exception as e:
+            logger.warning(f"[Filtro 3] Error vectorizando secciones: {e}")
+            return {"ok": True, "coherencia_pct": 100.0, "pares_invalidos": [], "detalles": []}
+
+        pares = [("Problema", "Objetivo"), ("Problema", "Justificación"), ("Objetivo", "Justificación")]
+        pares_invalidos, sims, detalles = [], [], []
+
+        for (sec_a, sec_b) in pares:
+            if sec_a not in vectores or sec_b not in vectores:
+                detalles.append(f"{sec_a} ↔ {sec_b}: contenido insuficiente (omitido)")
+                continue
+            v1, v2 = vectores[sec_a], vectores[sec_b]
+            den = np.linalg.norm(v1) * np.linalg.norm(v2)
+            sim = float(np.dot(v1, v2) / den) if den > 0 else 0.0
+            sims.append(sim)
+            if sim < constants.COHERENCIA_UMBRAL:
+                detalles.append(f"{sec_a} ↔ {sec_b}: {sim:.2f} (INCOHERENTE)")
+                pares_invalidos.append({"par": f"{sec_a} ↔ {sec_b}", "similitud": round(sim, 3)})
+            else:
+                detalles.append(f"{sec_a} ↔ {sec_b}: {sim:.2f} (OK)")
+
+        coherencia_pct = round(float(np.mean(sims)) * 100, 1) if sims else 100.0
+        return {
+            "ok": len(pares_invalidos) == 0,
+            "coherencia_pct": coherencia_pct,
+            "pares_invalidos": pares_invalidos,
+            "detalles": detalles,
+        }
+
+    # ── Mantener compatibilidad con código viejo que llame is_valid_project ─
     def is_valid_project(self, text: str) -> bool:
-        if not text:
-            return False
-
-        text_lower = text.lower()
-        black_list = ["currículum", "curriculum vitae", "experiencia laboral", "autoevaluación", "manual de usuario", "manual de mantenimiento"]
-        for word in black_list:
-            if word in text_lower[:2000]:
-                logger.warning(f"Documento rechazado por contener palabra bloqueada: {word}")
-                return False
-
-        return True
+        """Deprecated: usar validar_blacklist_extendida() + validar_secciones_profesor()."""
+        result = self.validar_blacklist_extendida(text)
+        return result["ok"]
 
     def anonymize_pii(self, text: str) -> str:
         
@@ -94,6 +282,10 @@ class NLPService:
         text = re.sub(r'\*\*(Categoría|Grupo de Similitud|Nivel de Dificultad).*?\n', '\n', text, flags=re.IGNORECASE)
 
         text = re.sub(r'^[-=]{3,}$', '', text, flags=re.MULTILINE)
+
+        # Remover formato de tablas Markdown generado por pymupdf4llm
+        text = re.sub(r'\|\s*[-:]+\s*\|(\s*[-:]+\s*\|)*', '\n', text)
+        text = re.sub(r'\|', ' ', text)
 
         text = re.sub(r'^.*[Mm]atrícula:.*\d+.*$', '', text, flags=re.MULTILINE)
 

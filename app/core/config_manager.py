@@ -15,7 +15,9 @@ class ConfigManager:
             os.makedirs(settings.CHROMA_DB_PATH, exist_ok=True)
             default_config = {
                 "allowed_extensions": [".pdf", ".md", ".txt"],
-                "llm_provider": "ollama"
+                "llm_provider": "ollama",
+                "exclusion_rules": [],
+                "project_sections": []
             }
             self.save_config(default_config)
 
@@ -25,7 +27,12 @@ class ConfigManager:
                 return json.load(f)
         except Exception as e:
             logger.error(f"Error leyendo config: {e}")
-            return {"allowed_extensions": [".pdf", ".md", ".txt"], "llm_provider": "ollama"}
+            return {
+                "allowed_extensions": [".pdf", ".md", ".txt"],
+                "llm_provider": "ollama",
+                "exclusion_rules": [],
+                "project_sections": []
+            }
 
     def save_config(self, config_data: dict):
         try:
@@ -38,5 +45,11 @@ class ConfigManager:
 
     def get_allowed_extensions(self):
         return tuple(self.get_config().get("allowed_extensions", [".pdf", ".md", ".txt"]))
+
+    def get_exclusion_rules(self):
+        return self.get_config().get("exclusion_rules", [])
+
+    def get_project_sections(self):
+        return self.get_config().get("project_sections", [])
 
 config_manager = ConfigManager()

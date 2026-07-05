@@ -1,13 +1,14 @@
 import asyncio
-import aiohttp
+import httpx
 import json
 import logging
+from app.core.config import settings
 from app.services.blue_ocean_db import blue_ocean_db
 from app.api.routes import analysis_lock
 
 logger = logging.getLogger(__name__)
 
-LLM_SERVICE_URL = "http://llm-service:3003/api/v1/llm/analyze-blue-ocean"
+
 
 class BlueOceanWorker:
     def __init__(self):
@@ -27,7 +28,7 @@ class BlueOceanWorker:
             logger.info("Blue Ocean Worker stopped.")
 
     async def _worker_loop(self):
-        from app.services.chroma_service import chroma_service
+        from app.services.qdrant_service import qdrant_service
         
         while self._is_running:
             try:
@@ -35,9 +36,9 @@ class BlueOceanWorker:
                 
                 if not pending:
                     try:
-                        results = chroma_service.collection.get(include=["metadatas"])
-                        if results and results.get('metadatas'):
-                            for meta in results['metadatas']:
+                        vectors, payloads = qdrant_service.get_all_embeddings()
+                        if payloads:
+                            for meta in payloads:
                                 if meta and meta.get('is_blue_ocean'):
                                     p_id = meta.get('project_id')
                                     if p_id:
@@ -80,14 +81,13 @@ class BlueOceanWorker:
         }
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(LLM_SERVICE_URL, json=payload, timeout=120) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    else:
-                        text = await response.text()
-                        logger.error(f"LLM Service devolvió status {response.status}: {text}")
-                        return None
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{settings.LLM_SERVICE_URL}/api/v1/llm/analyze-blue-ocean", json=payload, timeout=120.0)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    logger.error(f"LLM Service devolvió status {response.status_code}: {response.text}")
+                    return None
         except Exception as e:
             logger.error(f"Error conectando con LLM Service: {e}")
             return None

@@ -31,6 +31,12 @@ def _init_db():
                 secciones_opcionales TEXT
             )
         """)
+        # Add columns for minimap safely
+        for col, col_def in [("cluster_id", "INTEGER"), ("coord_x", "REAL"), ("coord_y", "REAL")]:
+            try:
+                conn.execute(f"ALTER TABLE inference_log ADD COLUMN {col} {col_def}")
+            except sqlite3.OperationalError:
+                pass
         conn.commit()
 
 def log_inference(
@@ -42,6 +48,9 @@ def log_inference(
     veredicto: str = None,
     secciones_faltantes: list = None,
     secciones_opcionales: list = None,
+    cluster_id: int = None,
+    coord_x: float = None,
+    coord_y: float = None,
 ) -> int:
     
     _init_db()
@@ -50,8 +59,9 @@ def log_inference(
             """
             INSERT INTO inference_log (
                 user_id, timestamp, filename, score_colision, nivel_riesgo, 
-                academic_alignment, veredicto, secciones_faltantes, secciones_opcionales
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                academic_alignment, veredicto, secciones_faltantes, secciones_opcionales,
+                cluster_id, coord_x, coord_y
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -63,6 +73,9 @@ def log_inference(
                 veredicto,
                 ", ".join(secciones_faltantes) if secciones_faltantes else "",
                 ", ".join(secciones_opcionales) if secciones_opcionales else "",
+                cluster_id,
+                coord_x,
+                coord_y,
             ),
         )
         conn.commit()
@@ -91,6 +104,9 @@ def get_history(limit: int = 50, offset: int = 0) -> dict:
             "veredicto": row["veredicto"],
             "secciones_faltantes": row["secciones_faltantes"],
             "secciones_opcionales": row["secciones_opcionales"],
+            "cluster_id": row["cluster_id"] if "cluster_id" in row.keys() else None,
+            "coord_x": row["coord_x"] if "coord_x" in row.keys() else None,
+            "coord_y": row["coord_y"] if "coord_y" in row.keys() else None,
         })
 
     return {"total": total, "limit": limit, "offset": offset, "items": items}
