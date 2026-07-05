@@ -104,14 +104,28 @@ class NLPService:
                 "encontradas": [],
                 "completitud_pct": 100.0,
             }
-            
+
+        # Construir lookup de keywords por nombre de sección desde constants.py (fallback)
+        _constants_lookup = {s["nombre"]: s["keywords"] for s in constants.SECCIONES_PROFESOR}
+
         obligatorias_total = sum(1 for s in project_sections if s.get("obligatoria", False))
 
         for seccion in project_sections:
-            if any(kw.lower() in t for kw in seccion.get("keywords", [])):
-                encontradas.append(seccion.get("nombre", ""))
+            seccion_nombre = seccion.get("nombre", "")
+            kws = seccion.get("keywords", [])
+
+            # Si el profe no definió keywords, buscar en constants.py por nombre similar
+            if not kws:
+                for const_nombre, const_kws in _constants_lookup.items():
+                    if const_nombre.lower() in seccion_nombre.lower() or seccion_nombre.lower() in const_nombre.lower():
+                        kws = const_kws
+                        logger.debug(f"[Filtro 2B] Sección '{seccion_nombre}' sin keywords → usando fallback de constants: {const_nombre}")
+                        break
+
+            if any(kw.lower() in t for kw in kws):
+                encontradas.append(seccion_nombre)
             elif seccion.get("obligatoria", False):
-                faltantes.append(seccion.get("nombre", ""))
+                faltantes.append(seccion_nombre)
 
         obligatorias_encontradas = len([s for s in project_sections
                                         if s.get("obligatoria", False) and s.get("nombre", "") in encontradas])
