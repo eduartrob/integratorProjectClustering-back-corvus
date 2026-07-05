@@ -700,12 +700,10 @@ async def get_analysis_result(user_id: str):
         result = analysis_result_store.pop(user_id)
         analysis_progress_store.pop(user_id, None)
         
-        draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
-        try:
-            if os.path.exists(draft_path):
-                os.remove(draft_path)
-        except Exception:
-            pass
+        # IMPORTANTE: NO borrar el borrador aquí. 
+        # El alumno lo necesita para continuar con el "Análisis exhaustivo".
+        # Solo se borrará cuando llame explícitamente a DELETE /draft-proposal/{user_id}
+        # o cuando termine el análisis exhaustivo.
             
         return result
 
