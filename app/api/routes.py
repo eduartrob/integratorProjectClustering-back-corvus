@@ -362,7 +362,7 @@ DRAFTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "drafts")
 os.makedirs(DRAFTS_DIR, exist_ok=True)
 
 @router.post("/pre-validate-proposal")
-async def pre_validate_proposal(user_id: str = Form(...), file: UploadFile = File(...), background_tasks: BackgroundTasks = Depends(BackgroundTasks)):
+async def pre_validate_proposal(background_tasks: BackgroundTasks, user_id: str = Form(...), file: UploadFile = File(...)):
     file_bytes = await file.read()
     filename_lower = file.filename.lower()
     filename_real = file.filename
@@ -587,12 +587,18 @@ async def get_draft_proposal(user_id: str):
             return {"status": "not_found"}
     return {"status": "not_found"}
 
+@router.get("/drift-metrics")
+async def get_drift_metrics():
+    """
+    Retorna las métricas actuales de deriva y cuenta de proyectos nuevos.
+    """
+    return clustering_engine.get_drift_metrics()
+
 @router.get("/analysis-status/{user_id}")
 async def get_analysis_status(user_id: str):
-    
     if user_id in analysis_progress_store:
         return analysis_progress_store[user_id]
-    return {"phase": 1, "message": "Procesando propuesta..."}
+    return {"phase": 0, "message": ""}
 
 async def _run_analysis_background(user_id: str, draft_path: str):
     
@@ -694,12 +700,10 @@ async def get_analysis_result(user_id: str):
         result = analysis_result_store.pop(user_id)
         analysis_progress_store.pop(user_id, None)
         
-        draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
-        try:
-            if os.path.exists(draft_path):
-                os.remove(draft_path)
-        except Exception:
-            pass
+        # IMPORTANTE: NO borrar el borrador aquí. 
+        # El alumno lo necesita para continuar con el "Análisis exhaustivo".
+        # Solo se borrará cuando llame explícitamente a DELETE /draft-proposal/{user_id}
+        # o cuando termine el análisis exhaustivo.
             
         return result
 

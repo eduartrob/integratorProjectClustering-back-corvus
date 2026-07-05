@@ -191,32 +191,150 @@ async def execute_clustering(background_tasks: BackgroundTasks):
     background_tasks.add_task(run_clustering)
     return {"message": "Iniciando vectorización y clustering global en segundo plano. Esto puede tomar unos minutos."}
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Header, Response
 from app.core.config_manager import config_manager
 from pydantic import BaseModel
+import hashlib
+import json
+import httpx
+from typing import List, Dict, Any, Optional
 
 class ConfigUpdateRequest(BaseModel):
     allowed_extensions: list[str]
     llm_provider: str = "ollama"
     drive_folder_id: str = ""
+    exclusion_rules: List[str] = []
+    project_sections: List[Dict[str, Any]] = []
+    authorName: Optional[str] = None
+    authorPhotoUrl: Optional[str] = None
 
 @router.get("/config")
-async def get_system_config():
+async def get_system_config(response: Response, if_none_match: Optional[str] = Header(None)):
+    config_data = config_manager.get_config()
     
-    return config_manager.get_config()
+    # Generate ETag
+    config_json = json.dumps(config_data, sort_keys=True)
+    etag = hashlib.md5(config_json.encode('utf-8')).hexdigest()
+    
+    if if_none_match == etag:
+        response.status_code = 304
+        return None
+        
+    response.headers["ETag"] = etag
+    return config_data
 
 @router.post("/config")
 async def update_system_config(request: ConfigUpdateRequest):
+    old_config = config_manager.get_config()
     
     new_config = {
         "allowed_extensions": request.allowed_extensions,
         "llm_provider": request.llm_provider,
-        "drive_folder_id": request.drive_folder_id
+        "drive_folder_id": request.drive_folder_id,
+        "exclusion_rules": request.exclusion_rules,
+        "project_sections": request.project_sections
     }
+    
+    # --- Generar notificación descriptiva ---
+    title_parts = []
+    body_parts = []
+    
+    old_rules = set(old_config.get("exclusion_rules", []))
+    new_rules = set(request.exclusion_rules)
+    blocked = new_rules - old_rules
+    unblocked = old_rules - new_rules
+    
+    if blocked:
+        body_parts.append(f"Se han bloqueado los temas: {', '.join(blocked)}")
+    if unblocked:
+        body_parts.append(f"Se han desbloqueado los temas: {', '.join(unblocked)}")
+        
+    if blocked or unblocked:
+        title_parts.append("Se han actualizado los Temas para Proyecto")
+        
+    old_sec_names = set(s.get("nombre", "") for s in old_config.get("project_sections", []))
+    new_sec_names = set(s.get("nombre", "") for s in request.project_sections)
+    
+    added_sections = new_sec_names - old_sec_names
+    removed_sections = old_sec_names - new_sec_names
+    
+    if added_sections:
+        body_parts.append(f"Secciones añadidas: {', '.join(added_sections)}")
+    if removed_sections:
+        body_parts.append(f"Secciones eliminadas: {', '.join(removed_sections)}")
+        
+    if added_sections or removed_sections:
+        title_parts.append("Se ha actualizado la Estructura de Proyecto")
+        
+    if not title_parts:
+        title = "Nuevas reglas y estructura de proyecto"
+    else:
+        title = " y ".join(title_parts)
+        
+    if not body_parts:
+        body = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!"
+    else:
+        body = ". ".join(body_parts) + "."
+        
+    # ----------------------------------------
+
     success = config_manager.save_config(new_config)
     if success:
+        # Trigger silent notification after saving
+        await notify_rules(title=title, body=body, authorName=request.authorName, authorPhotoUrl=request.authorPhotoUrl)
         return {"message": "Configuración actualizada con éxito.", "config": new_config}
     raise HTTPException(status_code=500, detail="Error al actualizar la configuración.")
+
+@router.post("/generate-sections", tags=["Admin Panel"])
+async def generate_sections():
+    from app.services.llm_client import llm_client
+    prompt = (
+        "Actúa como un comité académico experto. "
+        "Lista únicamente las secciones esenciales que debe contener un documento formal de propuesta de proyecto integrador universitario. "
+        "Para cada sección, proporciona su nombre corto y una lista de 3 a 5 palabras clave que suelan encontrarse en dicha sección. "
+        "Devuelve EXCLUSIVAMENTE un arreglo JSON con el formato: [{\"nombre\": \"NombreSeccion\", \"keywords\": [\"kw1\", \"kw2\"], \"obligatoria\": true}]. "
+        "No incluyas texto adicional ni markdown."
+    )
+    
+    response_text = await llm_client.generate(prompt)
+    if response_text:
+        import re
+        try:
+            clean_text = re.sub(r'```(?:json)?', '', response_text).strip()
+            sections = json.loads(clean_text)
+            return {"sections": sections}
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=500, detail="El modelo no devolvió un JSON válido.")
+    raise HTTPException(status_code=500, detail="Fallo en la generación con IA.")
+
+@router.post("/notify-rules", tags=["Admin Panel"])
+async def notify_rules(title: str = "Nuevas reglas y estructura de proyecto", body: str = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!", authorName: Optional[str] = None, authorPhotoUrl: Optional[str] = None):
+    print("📢 Intentando notificar a los dispositivos móviles (Push Visible)...", flush=True)
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "http://notifications-service:3001/api/notifications/topic/push",
+                json={
+                    "topic": "config_updates",
+                    "title": title,
+                    "body": body,
+                    "data": {
+                        "type": "CONFIG_UPDATED",
+                        "authorName": authorName or "",
+                        "authorPhotoUrl": authorPhotoUrl or ""
+                    }
+                }
+            )
+            if resp.status_code == 200:
+                print("✅ Notificación enviada correctamente al servidor de Node.")
+                return {"message": "Notificación enviada a los dispositivos."}
+            else:
+                print(f"❌ Error al notificar: Código {resp.status_code}, Body: {resp.text}")
+                return {"message": "Config guardada, pero falló la notificación."}
+    except Exception as e:
+        print(f"❌ Error llamando al microservicio de notificaciones: {e}")
+        return {"message": "Falló la comunicación con notifications-service."}
+
 
 @router.get("/recent-projects", tags=["Admin Panel"])
 async def get_recent_projects(limit: int = 50):
