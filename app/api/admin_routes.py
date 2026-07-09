@@ -203,6 +203,7 @@ class ConfigUpdateRequest(BaseModel):
     allowed_extensions: list[str]
     llm_provider: str = "ollama"
     drive_folder_id: str = ""
+    accepted_drive_folders: List[Dict[str, str]] = []
     exclusion_rules: List[str] = []
     project_sections: List[Dict[str, Any]] = []
     authorName: Optional[str] = None
@@ -231,6 +232,7 @@ async def update_system_config(request: ConfigUpdateRequest):
         "allowed_extensions": request.allowed_extensions,
         "llm_provider": request.llm_provider,
         "drive_folder_id": request.drive_folder_id,
+        "accepted_drive_folders": request.accepted_drive_folders,
         "exclusion_rules": request.exclusion_rules,
         "project_sections": request.project_sections
     }
@@ -397,4 +399,67 @@ async def get_recent_projects(limit: int = 50):
         projects_list.extend(vectorized_list)
         return projects_list[:limit]
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/drive/invitations")
+async def get_drive_invitations():
+    from app.services.drive_service import DriveService
+    try:
+        drive_service = DriveService()
+        folders = drive_service.get_shared_folders()
+        
+        current_config = config_manager.get_config()
+        accepted_folders = current_config.get("accepted_drive_folders", [])
+        accepted_ids = [f["id"] for f in accepted_folders]
+        
+        result = []
+        for folder in folders:
+            is_accepted = folder["id"] in accepted_ids
+            result.append({
+                "id": folder["id"],
+                "name": folder.get("name", "Carpeta sin nombre"),
+                "sharingUser": folder.get("sharingUser", {}),
+                "is_accepted": is_accepted
+            })
+            
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching drive invitations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class AcceptDriveFolderRequest(BaseModel):
+    folder_id: str
+
+@router.post("/drive/accept")
+async def accept_drive_folder(request: AcceptDriveFolderRequest):
+    from app.services.drive_service import DriveService
+    try:
+        drive_service = DriveService()
+        folder_info = drive_service.get_folder_info(request.folder_id)
+        if not folder_info:
+            raise HTTPException(status_code=404, detail="Carpeta no encontrada o sin acceso")
+            
+        current_config = config_manager.get_config()
+        accepted_folders = current_config.get("accepted_drive_folders", [])
+        
+        # Check if already accepted
+        if any(f["id"] == request.folder_id for f in accepted_folders):
+            return {"message": "La carpeta ya estaba aceptada", "config": current_config}
+            
+        accepted_folders.append({
+            "id": folder_info["id"],
+            "name": folder_info.get("name", "Carpeta sin nombre"),
+            "sharingUser": folder_info.get("sharingUser", {})
+        })
+        
+        current_config["accepted_drive_folders"] = accepted_folders
+        if config_manager.save_config(current_config):
+            return {"message": "Carpeta aceptada con éxito", "config": current_config}
+        else:
+            raise HTTPException(status_code=500, detail="Error al guardar configuración")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error accepting drive folder: {e}")
         raise HTTPException(status_code=500, detail=str(e))

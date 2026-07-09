@@ -16,6 +16,7 @@ class ConfigManager:
             default_config = {
                 "allowed_extensions": [".pdf", ".md", ".txt"],
                 "llm_provider": "ollama",
+                "accepted_drive_folders": [],
                 "exclusion_rules": [],
                 "project_sections": []
             }
@@ -30,6 +31,7 @@ class ConfigManager:
             return {
                 "allowed_extensions": [".pdf", ".md", ".txt"],
                 "llm_provider": "ollama",
+                "accepted_drive_folders": [],
                 "exclusion_rules": [],
                 "project_sections": []
             }
@@ -51,5 +53,8 @@ class ConfigManager:
 
     def get_project_sections(self):
         return self.get_config().get("project_sections", [])
+
+    def get_accepted_drive_folders(self):
+        return self.get_config().get("accepted_drive_folders", [])
 
 config_manager = ConfigManager()

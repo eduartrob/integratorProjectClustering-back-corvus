@@ -26,6 +26,33 @@ class DriveService:
         )
         return build('drive', 'v3', credentials=creds)
 
+    def get_shared_folders(self) -> list:
+        service = self.get_drive_service()
+        query = "sharedWithMe and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        
+        try:
+            results = service.files().list(
+                q=query,
+                pageSize=100,
+                fields="nextPageToken, files(id, name, sharingUser(emailAddress, displayName))"
+            ).execute()
+            return results.get('files', [])
+        except Exception as e:
+            logger.error(f"Error listing shared folders: {e}")
+            return []
+
+    def get_folder_info(self, folder_id: str) -> dict:
+        service = self.get_drive_service()
+        try:
+            result = service.files().get(
+                fileId=folder_id,
+                fields="id, name, sharingUser(emailAddress, displayName)"
+            ).execute()
+            return result
+        except Exception as e:
+            logger.error(f"Error getting folder {folder_id}: {e}")
+            return None
+
     def download_pdf_to_memory(self, file_id: str, access_token: str) -> io.BytesIO:
         
         service = self.get_drive_service(access_token)
