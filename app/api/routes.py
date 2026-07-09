@@ -273,8 +273,9 @@ async def get_blue_ocean_niches():
 
 from pydantic import BaseModel
 
+from typing import Optional
 class NicheViewRequest(BaseModel):
-    user_avatar: str = None
+    user_avatar: Optional[str] = None
 
 @router.post("/blue-ocean-niches/{niche_id}/view")
 async def track_niche_view(niche_id: str, payload: NicheViewRequest):
