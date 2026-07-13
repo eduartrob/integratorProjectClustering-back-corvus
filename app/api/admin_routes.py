@@ -206,8 +206,11 @@ class ConfigUpdateRequest(BaseModel):
     accepted_drive_folders: List[Dict[str, str]] = []
     exclusion_rules: List[str] = []
     project_sections: List[Dict[str, Any]] = []
+    min_team_members: int = 1
+    max_team_members: int = 5
     authorName: Optional[str] = None
     authorPhotoUrl: Optional[str] = None
+    authorId: Optional[str] = None
 
 @router.get("/config")
 async def get_system_config(response: Response, if_none_match: Optional[str] = Header(None)):
@@ -234,7 +237,9 @@ async def update_system_config(request: ConfigUpdateRequest):
         "drive_folder_id": request.drive_folder_id,
         "accepted_drive_folders": request.accepted_drive_folders,
         "exclusion_rules": request.exclusion_rules,
-        "project_sections": request.project_sections
+        "project_sections": request.project_sections,
+        "min_team_members": request.min_team_members,
+        "max_team_members": request.max_team_members
     }
     
     # --- Generar notificación descriptiva ---
@@ -267,6 +272,13 @@ async def update_system_config(request: ConfigUpdateRequest):
         
     if added_sections or removed_sections:
         title_parts.append("Se ha actualizado la Estructura de Proyecto")
+
+    old_min = old_config.get("min_team_members", 1)
+    old_max = old_config.get("max_team_members", 5)
+    if old_min != request.min_team_members or old_max != request.max_team_members:
+        body_parts.append(f"Nuevo límite de integrantes de equipo: {request.min_team_members} a {request.max_team_members} alumnos")
+        if "Se ha actualizado la Estructura de Proyecto" not in title_parts:
+            title_parts.append("Se ha actualizado la Estructura de Proyecto")
         
     if not title_parts:
         title = "Nuevas reglas y estructura de proyecto"
@@ -282,6 +294,23 @@ async def update_system_config(request: ConfigUpdateRequest):
 
     success = config_manager.save_config(new_config)
     if success:
+        # Log to ActivityLog if authorId is provided
+        if request.authorId and body_parts:
+            try:
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    await client.post(
+                        "http://authentication-back-corvus:3000/internal/activity-log",
+                        json={
+                            "userId": request.authorId,
+                            "action": "UPDATE_RULES",
+                            "detail": body
+                        },
+                        timeout=5.0
+                    )
+            except Exception as e:
+                print(f"Failed to log ActivityLog: {e}")
+
         # Trigger silent notification after saving
         await notify_rules(title=title, body=body, authorName=request.authorName, authorPhotoUrl=request.authorPhotoUrl)
         return {"message": "Configuración actualizada con éxito.", "config": new_config}

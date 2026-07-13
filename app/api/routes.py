@@ -244,6 +244,7 @@ async def get_blue_ocean_niches():
                 "view_count": views,
                 "recent_viewers": niche_state.get('recent_viewers', []),
                 "analysis_status": niche_state.get('analysis_status', 'pending'),
+                "analysis_data": niche_state.get('analysis_data'),
                 "_gravity_score": gravity_score
             })
             
@@ -863,3 +864,62 @@ def minimap_data():
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+class ValidateIdeaRequest(BaseModel):
+    idea: str
+
+@router.post("/validate-idea")
+async def validate_idea_endpoint(req: ValidateIdeaRequest):
+    """
+    Rápida validación de una idea de propuesta consultando el servicio LLM, 
+    las reglas del profesor y proyectos similares.
+    """
+    import httpx
+    
+    # 1. Obtener reglas bloqueadas
+    from app.core.config_manager import config_manager
+    config = config_manager.get_config()
+    blocked_topics = config.get("blocked_topics", [])
+    blocked_techs = config.get("blocked_technologies", [])
+    
+    # 2. Buscar similares en Qdrant
+    similar_projects = []
+    try:
+        chunks = nlp_service.chunk_text(req.idea)
+        embeddings = nlp_service.vectorize(chunks)
+        if embeddings and len(embeddings) > 0:
+            query_subset = embeddings[:1]
+            search_results = qdrant_service.search_similar_multi(
+                query_embeddings=query_subset, n_results=2
+            )
+            if search_results and search_results.get("documents"):
+                for q_idx in range(len(search_results["documents"])):
+                    docs  = search_results["documents"][q_idx]
+                    metas = search_results["metadatas"][q_idx]
+                    for doc, meta in zip(docs, metas):
+                        p_id = meta.get("project_id", "Desconocido")
+                        similar_projects.append({
+                            "title": f"Proyecto {p_id}",
+                            "description": doc[:200]
+                        })
+    except Exception as e:
+        print(f"Error al buscar similares: {e}")
+
+    # 3. Llamar al servicio LLM
+    try:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            llm_url = "http://corvus_llm_service:3003/api/v1/llm/validate-idea-quick"
+            payload = {
+                "idea": req.idea,
+                "blocked_topics": blocked_topics,
+                "blocked_techs": blocked_techs,
+                "similar_projects": similar_projects,
+                "provider": config.get("llm_provider", "ollama")
+            }
+            resp = await client.post(llm_url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return {"result": data.get("result", "Sin respuesta.")}
+    except Exception as e:
+        print(f"Error llamando al LLM: {e}")
+        return {"result": "El servicio de validación no está disponible en este momento."}
