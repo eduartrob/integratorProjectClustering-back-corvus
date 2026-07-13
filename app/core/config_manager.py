@@ -16,9 +16,10 @@ class ConfigManager:
             default_config = {
                 "allowed_extensions": [".pdf", ".md", ".txt"],
                 "llm_provider": "ollama",
-                "accepted_drive_folders": [],
                 "exclusion_rules": [],
-                "project_sections": []
+                "project_sections": [],
+                "min_team_members": 1,
+                "max_team_members": 5
             }
             self.save_config(default_config)
 
@@ -31,9 +32,10 @@ class ConfigManager:
             return {
                 "allowed_extensions": [".pdf", ".md", ".txt"],
                 "llm_provider": "ollama",
-                "accepted_drive_folders": [],
                 "exclusion_rules": [],
-                "project_sections": []
+                "project_sections": [],
+                "min_team_members": 1,
+                "max_team_members": 5
             }
 
     def save_config(self, config_data: dict):
@@ -56,5 +58,11 @@ class ConfigManager:
 
     def get_accepted_drive_folders(self):
         return self.get_config().get("accepted_drive_folders", [])
+
+    def get_min_team_members(self):
+        return self.get_config().get("min_team_members", 1)
+
+    def get_max_team_members(self):
+        return self.get_config().get("max_team_members", 5)
 
 config_manager = ConfigManager()
