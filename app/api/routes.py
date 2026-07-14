@@ -415,7 +415,17 @@ async def pre_validate_background(user_id: str, file_bytes: bytes, filename_lowe
                 assigned_cluster_name = cluster_names.get(str(cluster_id)) or cluster_names.get(cluster_id, f"Cluster {cluster_id}")
                 
                 exclusion_rules = config_manager.get_exclusion_rules()
-                if assigned_cluster_name in exclusion_rules:
+                
+                import unicodedata
+                def normalize_name(text):
+                    if not text: return ""
+                    t = str(text).lower().strip()
+                    return ''.join(c for c in unicodedata.normalize('NFD', t) if unicodedata.category(c) != 'Mn')
+                
+                assigned_norm = normalize_name(assigned_cluster_name)
+                exclusion_rules_norm = [normalize_name(r) for r in exclusion_rules]
+                
+                if assigned_norm in exclusion_rules_norm:
                     raise Exception(f"[Filtro 2A] Tu propuesta fue clasificada semánticamente en el tema '{assigned_cluster_name}', el cual ha sido bloqueado por los profesores.")
 
             analysis_progress_store[user_id] = {"phase": 3, "message": "Validando secciones obligatorias..."}
