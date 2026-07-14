@@ -64,22 +64,15 @@ class NLPService:
     # ── FILTRO 2A: Blacklist extendida ─────────────────────────────────────
     def validar_blacklist_extendida(self, texto_crudo: str) -> dict:
         """
-        Busca en los primeros 3000 chars del texto crudo palabras que indican
+        Busca en todo el texto crudo palabras que indican
         que el documento nunca es una propuesta.
         Retorna: {ok, palabra_bloqueada}
         """
-        t = texto_crudo.lower()[:3000]
+        t = texto_crudo.lower()
         for palabra in constants.BLACKLIST_DOCS:
             if palabra in t:
                 logger.warning(f"[Filtro 2A] Documento bloqueado por: '{palabra}'")
                 return {"ok": False, "palabra_bloqueada": palabra}
-                
-        exclusion_rules = config_manager.get_exclusion_rules()
-        for rule in exclusion_rules:
-            if rule.lower() in t:
-                logger.warning(f"[Filtro 2A] Documento bloqueado por tema/cluster excluido: '{rule}'")
-                return {"ok": False, "palabra_bloqueada": rule}
-                
         return {"ok": True, "palabra_bloqueada": None}
 
     # ── FILTRO 2B: Secciones del profesor ─────────────────────────────────

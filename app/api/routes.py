@@ -403,6 +403,21 @@ async def pre_validate_background(user_id: str, file_bytes: bytes, filename_lowe
             calidad_vocabulario_pct = resultado_ml["probabilidades"].get(resultado_ml["etiqueta"], 0.0)
             vector_nuevo = resultado_ml["vector"]
 
+            # Validación de temas bloqueados usando Clustering K-Means
+            from app.services.visualization_service import visualization_service
+            from app.core.config_manager import config_manager
+            
+            resultado_cluster = clustering_engine.asignar_cluster(vector_nuevo)
+            cluster_id = resultado_cluster.get("cluster_id", -1)
+            
+            if cluster_id != -1:
+                cluster_names = visualization_service.get_cluster_names()
+                assigned_cluster_name = cluster_names.get(str(cluster_id)) or cluster_names.get(cluster_id, f"Cluster {cluster_id}")
+                
+                exclusion_rules = config_manager.get_exclusion_rules()
+                if assigned_cluster_name in exclusion_rules:
+                    raise Exception(f"[Filtro 2A] Tu propuesta fue clasificada semánticamente en el tema '{assigned_cluster_name}', el cual ha sido bloqueado por los profesores.")
+
             analysis_progress_store[user_id] = {"phase": 3, "message": "Validando secciones obligatorias..."}
             resultado_blacklist = nlp_service.validar_blacklist_extendida(full_text)
             if not resultado_blacklist["ok"]:
