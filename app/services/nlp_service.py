@@ -82,10 +82,11 @@ class NLPService:
         Retorna: {ok, faltantes, encontradas, completitud_pct}
         """
         t = texto_crudo.lower()
-        # Limpiar tags HTML y formato Markdown que rompen la búsqueda de palabras clave
-        t = re.sub(r'<br\s*/?>', ' ', t)
-        t = re.sub(r'[*#_|]', ' ', t)
-        t = re.sub(r'\s+', ' ', t)
+        # Limpiar tags HTML y formato Markdown (negritas/italicas) pero conservar nuevas lineas y encabezados (#)
+        t = re.sub(r'<br\s*/?>', '\n', t)
+        t = re.sub(r'[*_|]', ' ', t)
+        # Limpiar múltiples espacios pero conservar saltos de linea
+        t = re.sub(r'[ \t]+', ' ', t)
         faltantes, encontradas = [], []
         
         project_sections = config_manager.get_project_sections()
@@ -127,7 +128,15 @@ class NLPService:
                         
                     logger.debug(f"[Filtro 2B] Sección personalizada '{seccion_nombre}' → usando keywords: {kws}")
 
-            if any(kw.lower() in t for kw in kws):
+            found = False
+            for kw in kws:
+                kw_escaped = re.escape(kw.lower())
+                pattern = r'(?m)^(?:#+\s*)?(?:(?:[0-9]{1,2}(?:\.[0-9]{1,2})*\.?|[a-z]{1,4}[\.\)])\s*)?' + kw_escaped + r'\b'
+                if re.search(pattern, t):
+                    found = True
+                    break
+
+            if found:
                 encontradas.append(seccion_nombre)
             elif seccion.get("obligatoria", False):
                 faltantes.append(seccion_nombre)
@@ -151,23 +160,33 @@ class NLPService:
         Retorna: {ok, coherencia_pct, pares_invalidos, detalles}
         """
         t = texto_crudo.lower()
+        t = re.sub(r'<br\s*/?>', '\n', t)
+        t = re.sub(r'[*_|]', ' ', t)
+        t = re.sub(r'[ \t]+', ' ', t)
+        
         contenidos = {}
 
         for nombre_sec, anchors in constants.ANCHORS_COHERENCIA.items():
             inicio = None
             for kw in anchors:
-                pos = t.find(kw)
-                if pos != -1:
-                    inicio = pos + len(kw)
+                kw_escaped = re.escape(kw.lower())
+                pattern = r'(?m)^(?:#+\s*)?(?:(?:[0-9]{1,2}(?:\.[0-9]{1,2})*\.?|[a-z]{1,4}[\.\)])\s*)?' + kw_escaped + r'\b'
+                match = re.search(pattern, t)
+                if match:
+                    inicio = match.end()
                     break
             if inicio is None:
                 continue
             fin = len(t)
             for otro_kw in constants.TODOS_LOS_ANCHORS:
-                pos = t.find(otro_kw, inicio + 1)
-                if pos != -1 and pos < fin:
-                    fin = pos
-            contenido = re.sub(r'\s+', ' ', texto_crudo[inicio:fin]).strip()
+                kw_escaped = re.escape(otro_kw.lower())
+                pattern_otro = r'(?m)^(?:#+\s*)?(?:(?:[0-9]{1,2}(?:\.[0-9]{1,2})*\.?|[a-z]{1,4}[\.\)])\s*)?' + kw_escaped + r'\b'
+                match_otro = re.search(pattern_otro, t[inicio:])
+                if match_otro:
+                    pos = inicio + match_otro.start()
+                    if pos < fin:
+                        fin = pos
+            contenido = re.sub(r'\s+', ' ', t[inicio:fin]).strip()
             if len(contenido) >= constants.MIN_CHARS_SECCION:
                 contenidos[nombre_sec] = contenido[:800]
 
