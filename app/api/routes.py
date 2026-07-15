@@ -579,6 +579,7 @@ async def pre_validate_background(user_id: str, file_bytes: bytes, filename_lowe
             pass
 
         draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+        quick_analysis["filename"] = filename_real
         draft_data = {
             "chunks": chunks,
             "similar_projects": similar_projects,
