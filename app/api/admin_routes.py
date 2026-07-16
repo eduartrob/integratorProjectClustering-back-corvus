@@ -1,10 +1,14 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from app.services.visualization_service import visualization_service
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-from typing import Optional
+from typing import Optional, List, Dict
 
 @router.get("/clusters-3d", response_class=HTMLResponse, tags=["Admin Panel"])
 async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None):
@@ -462,33 +466,103 @@ class AcceptDriveFolderRequest(BaseModel):
 @router.post("/drive/accept")
 async def accept_drive_folder(request: AcceptDriveFolderRequest):
     from app.services.drive_service import DriveService
+    from app.core.config import settings
     try:
         drive_service = DriveService()
         folder_info = drive_service.get_folder_info(request.folder_id)
         if not folder_info:
             raise HTTPException(status_code=404, detail="Carpeta no encontrada o sin acceso")
-            
+
+        # --- Extraer el correo del propietario de la carpeta ---
+        sharing_user = folder_info.get("sharingUser", {})
+        owner_email = sharing_user.get("emailAddress", "")
+
+        if not owner_email:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo determinar el correo del propietario de la carpeta."
+            )
+
+        # --- Verificar que el correo pertenece a un profesor en el sistema ---
+        professor_info = None
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/admin/find-professor-by-email",
+                    params={"email": owner_email},
+                    timeout=5.0
+                )
+                if resp.status_code == 200:
+                    professor_info = resp.json()
+        except Exception as auth_err:
+            logger.error(f"Error contacting auth service: {auth_err}")
+
+        if not professor_info:
+            raise HTTPException(
+                status_code=403,
+                detail=f"El correo '{owner_email}' no pertenece a ningún profesor registrado en Corvus. "
+                       f"El profesor debe compartir la carpeta con el mismo correo con el que se registró (principal o secundario)."
+            )
+
         current_config = config_manager.get_config()
         accepted_folders = current_config.get("accepted_drive_folders", [])
-        
-        # Check if already accepted
-        if any(f["id"] == request.folder_id for f in accepted_folders):
-            return {"message": "La carpeta ya estaba aceptada", "config": current_config}
-            
-        accepted_folders.append({
+
+        # Actualizar si ya existía o agregar nuevo
+        existing_idx = next((i for i, f in enumerate(accepted_folders) if f["id"] == request.folder_id), -1)
+        folder_record = {
             "id": folder_info["id"],
             "name": folder_info.get("name", "Carpeta sin nombre"),
-            "sharingUser": folder_info.get("sharingUser", {})
-        })
-        
+            "sharingUser": sharing_user,
+            "professor_id": professor_info.get("id"),
+            "professor_name": professor_info.get("full_name") or professor_info.get("email"),
+            "university_id": professor_info.get("university_id"),
+            "career_id": professor_info.get("career_id"),
+        }
+
+        if existing_idx >= 0:
+            accepted_folders[existing_idx] = folder_record
+        else:
+            accepted_folders.append(folder_record)
+
         current_config["accepted_drive_folders"] = accepted_folders
         if config_manager.save_config(current_config):
-            return {"message": "Carpeta aceptada con éxito", "config": current_config}
+            return {
+                "message": "Carpeta aceptada con éxito",
+                "professor": professor_info.get("full_name") or professor_info.get("email"),
+                "university_id": professor_info.get("university_id"),
+                "career_id": professor_info.get("career_id"),
+            }
         else:
             raise HTTPException(status_code=500, detail="Error al guardar configuración")
-            
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error accepting drive folder: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/drive/professor-folders")
+async def get_professor_folders(professor_id: str):
+    """
+    Returns the accepted Drive folders that belong to a specific professor.
+    Called by the Auth service when the professor views their profile.
+    """
+    try:
+        current_config = config_manager.get_config()
+        accepted_folders = current_config.get("accepted_drive_folders", [])
+        professor_folders = [
+            {
+                "folder_id": f["id"],
+                "folder_name": f["name"],
+                "status": "synced",
+                "university_id": f.get("university_id"),
+                "career_id": f.get("career_id"),
+            }
+            for f in accepted_folders
+            if f.get("professor_id") == professor_id
+        ]
+        return professor_folders
+    except Exception as e:
+        logger.error(f"Error fetching professor folders: {e}")
         raise HTTPException(status_code=500, detail=str(e))

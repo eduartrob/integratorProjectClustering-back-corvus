@@ -296,7 +296,12 @@ async def track_niche_view(niche_id: str, payload: NicheViewRequest):
 from fastapi import Header
 
 @router.post("/populate-from-local-folder")
-async def populate_from_local_folder(x_api_key: str = Header(default=None)):
+async def populate_from_local_folder(
+    x_api_key: str = Header(default=None),
+    university_id: str = Form(default="General"),
+    career_id: str = Form(default="General"),
+    professor_id: str = Form(default="General"),
+):
     
     import os
     from pathlib import Path
@@ -346,7 +351,11 @@ async def populate_from_local_folder(x_api_key: str = Header(default=None)):
                 payloads=[{
                     "project_id": project_id,
                     "text": chunk,
-                    "source_url": f"local://projectsTests/{filename}"
+                    "source_url": f"local://projectsTests/{filename}",
+                    "university_id": university_id,
+                    "career_id": career_id,
+                    "professor_id": professor_id,
+                    "source": "google_drive_import"
                 } for chunk in chunks]
             )
             
@@ -364,7 +373,7 @@ DRAFTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "drafts")
 os.makedirs(DRAFTS_DIR, exist_ok=True)
 
 @router.post("/pre-validate-proposal")
-async def pre_validate_proposal(background_tasks: BackgroundTasks, user_id: str = Form(...), team_id: str = Form(None), uploaded_by: str = Form(None), file: UploadFile = File(...)):
+async def pre_validate_proposal(background_tasks: BackgroundTasks, user_id: str = Form(...), team_id: str = Form(None), uploaded_by: str = Form(None), university_id: str = Form(default=None), career_id: str = Form(default=None), file: UploadFile = File(...)):
     file_bytes = await file.read()
     filename_lower = file.filename.lower()
     filename_real = file.filename
@@ -372,11 +381,11 @@ async def pre_validate_proposal(background_tasks: BackgroundTasks, user_id: str 
     target_id = team_id if team_id else user_id
     
     analysis_progress_store[target_id] = {"phase": 1, "message": "Iniciando pre-validación...", "uploaded_by": uploaded_by}
-    background_tasks.add_task(pre_validate_background, target_id, user_id, file_bytes, filename_lower, filename_real, uploaded_by)
+    background_tasks.add_task(pre_validate_background, target_id, user_id, file_bytes, filename_lower, filename_real, uploaded_by, university_id, career_id)
     
     return {"status": "pending", "message": "Pre-validación iniciada"}
 
-async def pre_validate_background(target_id: str, user_id: str, file_bytes: bytes, filename_lower: str, filename_real: str, uploaded_by: str = None):
+async def pre_validate_background(target_id: str, user_id: str, file_bytes: bytes, filename_lower: str, filename_real: str, uploaded_by: str = None, university_id: str = None, career_id: str = None):
     try:
         active_analysis_tasks[target_id] = asyncio.current_task()
         
@@ -452,12 +461,20 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
             chunks = nlp_service.chunk_text(safe_text)
             embeddings = nlp_service.vectorize(chunks)
 
+            # Build context filter for isolated search
+            must_conditions = []
+            if university_id:
+                must_conditions.append({"key": "university_id", "match": {"value": university_id}})
+            if career_id:
+                must_conditions.append({"key": "career_id", "match": {"value": career_id}})
+
             max_similitud_pct = 0.0
             similar_projects = []
             if embeddings and len(embeddings) > 0:
                 query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
                 search_results = qdrant_service.search_similar_multi(
-                    query_embeddings=query_subset, n_results=3
+                    query_embeddings=query_subset, n_results=3,
+                    must_conditions=must_conditions if must_conditions else None
                 )
                 if search_results and search_results.get("documents"):
                     grouped_projects = {}
@@ -486,6 +503,15 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
                             "content": " ".join(p_data["chunks"][:3]),
                             "similarity_pct": similitud_pct
                         })
+
+            # --- BLOQUEO INMEDIATO: Propuesta ya registrada (duplicado) ---
+            DUPLICATE_THRESHOLD = 85.0
+            if max_similitud_pct >= DUPLICATE_THRESHOLD:
+                raise Exception(
+                    f"[Filtro Antiplagio] Tu propuesta es un duplicado de un proyecto ya registrado "
+                    f"({max_similitud_pct:.1f}% de similitud). No está permitido subir una propuesta "
+                    f"igual o casi idéntica a una ya enviada anteriormente."
+                )
 
             resultado_cluster = {"cluster_id": -1, "cluster_total": 0,
                                  "innovacion_pct": 50.0, "posicion_pct": 50.0,
@@ -956,3 +982,53 @@ async def validate_idea_endpoint(req: ValidateIdeaRequest):
     except Exception as e:
         print(f"Error llamando al LLM: {e}")
         return {"result": "El servicio de validación no está disponible en este momento."}
+
+
+@router.post("/register-historical-proposal")
+async def register_historical_proposal(
+    target_id: str = Form(...), # team_id or user_id
+    university_id: str = Form(default="General"),
+    career_id: str = Form(default="General"),
+    professor_id: str = Form(default="General"),
+    status: str = Form(...) # 'aprobado' or 'rechazado'
+):
+    """
+    Called by orchestration when a professor accepts/rejects a proposal.
+    Permanently registers the proposal vectors in Qdrant for future plagiarism detection.
+    """
+    draft_path = os.path.join(DRAFTS_DIR, f"{target_id}_draft.json")
+    if not os.path.exists(draft_path):
+        raise HTTPException(status_code=404, detail="No se encontró el borrador de esta propuesta.")
+
+    try:
+        with open(draft_path, "r", encoding="utf-8") as f:
+            draft_data = json.load(f)
+
+        chunks = draft_data.get("chunks", [])
+        if not chunks:
+            raise HTTPException(status_code=400, detail="El borrador no tiene fragmentos de texto (chunks).")
+
+        embeddings = nlp_service.vectorize(chunks)
+        
+        if embeddings is None or len(embeddings) == 0:
+            raise HTTPException(status_code=500, detail="Fallo al vectorizar la propuesta.")
+            
+        qdrant_service.add_embeddings(
+            vectors=embeddings,
+            payloads=[{
+                "project_id": target_id,
+                "text": chunk,
+                "source_url": f"corvus://student_submission/{target_id}",
+                "university_id": university_id,
+                "career_id": career_id,
+                "professor_id": professor_id,
+                "source": "student_submission",
+                "status": status
+            } for chunk in chunks]
+        )
+        
+        return {"status": "success", "message": "Propuesta registrada exitosamente en el historial."}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
