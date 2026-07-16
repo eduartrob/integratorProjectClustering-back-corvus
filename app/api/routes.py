@@ -364,25 +364,27 @@ DRAFTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "drafts")
 os.makedirs(DRAFTS_DIR, exist_ok=True)
 
 @router.post("/pre-validate-proposal")
-async def pre_validate_proposal(background_tasks: BackgroundTasks, user_id: str = Form(...), file: UploadFile = File(...)):
+async def pre_validate_proposal(background_tasks: BackgroundTasks, user_id: str = Form(...), team_id: str = Form(None), uploaded_by: str = Form(None), file: UploadFile = File(...)):
     file_bytes = await file.read()
     filename_lower = file.filename.lower()
     filename_real = file.filename
     
-    analysis_progress_store[user_id] = {"phase": 1, "message": "Iniciando pre-validación..."}
-    background_tasks.add_task(pre_validate_background, user_id, file_bytes, filename_lower, filename_real)
+    target_id = team_id if team_id else user_id
+    
+    analysis_progress_store[target_id] = {"phase": 1, "message": "Iniciando pre-validación...", "uploaded_by": uploaded_by}
+    background_tasks.add_task(pre_validate_background, target_id, user_id, file_bytes, filename_lower, filename_real, uploaded_by)
     
     return {"status": "pending", "message": "Pre-validación iniciada"}
 
-async def pre_validate_background(user_id: str, file_bytes: bytes, filename_lower: str, filename_real: str):
+async def pre_validate_background(target_id: str, user_id: str, file_bytes: bytes, filename_lower: str, filename_real: str, uploaded_by: str = None):
     try:
-        active_analysis_tasks[user_id] = asyncio.current_task()
+        active_analysis_tasks[target_id] = asyncio.current_task()
         
         def _cpu_bound():
             if not filename_lower.endswith(('.pdf', '.md', '.txt')):
                 raise Exception("El archivo debe ser PDF, MD o TXT")
 
-            analysis_progress_store[user_id] = {"phase": 1, "message": "Extrayendo texto del documento..."}
+            analysis_progress_store[target_id] = {"phase": 1, "message": "Extrayendo texto del documento...", "uploaded_by": uploaded_by}
             full_text = ""
             if filename_lower.endswith('.pdf'):
                 doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -396,7 +398,7 @@ async def pre_validate_background(user_id: str, file_bytes: bytes, filename_lowe
             if nlp_service.detect_prompt_injection(full_text):
                 raise Exception("ALERTA: Se detectó un intento de inyección de prompt.")
 
-            analysis_progress_store[user_id] = {"phase": 2, "message": "Ejecutando modelo clasificador..."}
+            analysis_progress_store[target_id] = {"phase": 2, "message": "Ejecutando modelo clasificador...", "uploaded_by": uploaded_by}
             texto_limpio = nlp_service.strip_structure(full_text)
             texto_limpio = nlp_service.normalize_homoglyphs(texto_limpio)
             resultado_ml = nlp_service.clasificar_propuesta_ml(texto_limpio)
@@ -428,7 +430,7 @@ async def pre_validate_background(user_id: str, file_bytes: bytes, filename_lowe
                 if assigned_norm in exclusion_rules_norm:
                     raise Exception(f"[Filtro 2A] Tu propuesta fue clasificada semánticamente en el tema '{assigned_cluster_name}', el cual ha sido bloqueado por los profesores.")
 
-            analysis_progress_store[user_id] = {"phase": 3, "message": "Validando secciones obligatorias..."}
+            analysis_progress_store[target_id] = {"phase": 3, "message": "Validando secciones obligatorias...", "uploaded_by": uploaded_by}
             resultado_blacklist = nlp_service.validar_blacklist_extendida(full_text)
             if not resultado_blacklist["ok"]:
                 raise Exception(f"[Filtro 2A] El documento contiene contenido no permitido ('{resultado_blacklist['palabra_bloqueada']}'). Sube tu propuesta de proyecto, no un CV o manual.")
@@ -445,7 +447,7 @@ async def pre_validate_background(user_id: str, file_bytes: bytes, filename_lowe
                 pares_str = "; ".join(p["par"] for p in resultado_coherencia["pares_invalidos"])
                 raise Exception(f"[Filtro 3] Las secciones de tu propuesta no son coherentes entre sí ({pares_str}). Asegúrate de que el Problema, el Objetivo y la Justificación hablen del mismo proyecto.")
 
-            analysis_progress_store[user_id] = {"phase": 4, "message": "Buscando colisiones en Qdrant..."}
+            analysis_progress_store[target_id] = {"phase": 4, "message": "Buscando colisiones en Qdrant...", "uploaded_by": uploaded_by}
             safe_text = nlp_service.anonymize_pii(texto_limpio)
             chunks = nlp_service.chunk_text(safe_text)
             embeddings = nlp_service.vectorize(chunks)
@@ -578,24 +580,26 @@ async def pre_validate_background(user_id: str, file_bytes: bytes, filename_lowe
         except Exception as e:
             pass
 
-        draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+        draft_path = os.path.join(DRAFTS_DIR, f"{target_id}_draft.json")
         quick_analysis["filename"] = filename_real
+        quick_analysis["uploaded_by"] = uploaded_by
         draft_data = {
             "chunks": chunks,
             "similar_projects": similar_projects,
-            "quick_analysis": quick_analysis
+            "quick_analysis": quick_analysis,
+            "uploaded_by": uploaded_by
         }
         with open(draft_path, "w", encoding="utf-8") as f:
             json.dump(draft_data, f, ensure_ascii=False)
 
-        analysis_result_store[user_id] = quick_analysis
-        analysis_progress_store[user_id] = {"phase": 9, "message": "Pre-validación exitosa"}
+        analysis_result_store[target_id] = quick_analysis
+        analysis_progress_store[target_id] = {"phase": 9, "message": "Pre-validación exitosa", "uploaded_by": uploaded_by}
 
     except Exception as e:
         error_msg = str(e).replace('Exception: ', '').replace('Exception ', '')
-        analysis_progress_store[user_id] = {"phase": -1, "message": error_msg}
+        analysis_progress_store[target_id] = {"phase": -1, "message": error_msg, "uploaded_by": uploaded_by}
     finally:
-        active_analysis_tasks.pop(user_id, None)
+        active_analysis_tasks.pop(target_id, None)
 
 
 @router.get("/inference-history")
@@ -610,7 +614,9 @@ async def get_draft_proposal(user_id: str):
         try:
             with open(draft_path, "r", encoding="utf-8") as f:
                 draft_data = json.load(f)
-            return draft_data.get("quick_analysis", {})
+            qa = draft_data.get("quick_analysis", {})
+            qa["uploaded_by"] = draft_data.get("uploaded_by")
+            return qa
         except:
             return {"status": "not_found"}
     return {"status": "not_found"}
@@ -687,10 +693,11 @@ async def _run_analysis_background(user_id: str, draft_path: str):
                 "status": "success",
                 "message": "Análisis completado con Llama 3.2 3B",
                 "similar_projects_found": len(similar_projects),
-                "ollama_analysis": llm_verdict
+                "ollama_analysis": llm_verdict,
+                "uploaded_by": draft_data.get("uploaded_by")
             }
             analysis_result_store[user_id] = final_result
-            analysis_progress_store[user_id] = {"phase": 9, "message": "Análisis completado. Recuperando resultado..."}
+            analysis_progress_store[user_id] = {"phase": 9, "message": "Análisis completado. Recuperando resultado...", "uploaded_by": draft_data.get("uploaded_by")}
 
     except asyncio.CancelledError:
         print(f"BACKGROUND TASK: Análisis para {user_id} cancelado explícitamente.")
