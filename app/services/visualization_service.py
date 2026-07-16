@@ -116,7 +116,7 @@ class VisualizationService:
             "cluster_names": cluster_names
         }
 
-    def get_2d_scatter_data(self):
+    def get_2d_scatter_data(self, university_id=None, career_id=None):
         
         if not os.path.exists(self.umap_model_path):
             return []
@@ -145,7 +145,7 @@ class VisualizationService:
             
         return scatter_data
 
-    def generate_3d_html(self, filter_cluster_id: str = None):
+    def generate_3d_html(self, filter_cluster_id: str = None, university_id=None, career_id=None):
         unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
@@ -240,7 +240,7 @@ class VisualizationService:
 
         return fig.to_html(include_plotlyjs='cdn', full_html=True)
 
-    def generate_2d_html(self, filter_cluster_id: str = None):
+    def generate_2d_html(self, filter_cluster_id: str = None, university_id=None, career_id=None):
         unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
