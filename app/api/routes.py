@@ -384,7 +384,7 @@ DRAFTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "drafts")
 os.makedirs(DRAFTS_DIR, exist_ok=True)
 
 @router.post("/pre-validate-proposal")
-async def pre_validate_proposal(background_tasks: BackgroundTasks, user_id: str = Form(...), team_id: str = Form(None), uploaded_by: str = Form(None), university_id: str = Form(default=None), career_id: str = Form(default=None), file: UploadFile = File(...)):
+async def pre_validate_proposal(background_tasks: BackgroundTasks, user_id: str = Form(...), team_id: str = Form(None), project_id: str = Form(None), uploaded_by: str = Form(None), university_id: str = Form(default=None), career_id: str = Form(default=None), file: UploadFile = File(...)):
     file_bytes = await file.read()
     filename_lower = file.filename.lower()
     filename_real = file.filename
@@ -392,11 +392,11 @@ async def pre_validate_proposal(background_tasks: BackgroundTasks, user_id: str 
     target_id = team_id if team_id else user_id
     
     analysis_progress_store[target_id] = {"phase": 1, "message": "Iniciando pre-validación...", "uploaded_by": uploaded_by}
-    background_tasks.add_task(pre_validate_background, target_id, user_id, file_bytes, filename_lower, filename_real, uploaded_by, university_id, career_id)
+    background_tasks.add_task(pre_validate_background, target_id, user_id, file_bytes, filename_lower, filename_real, uploaded_by, university_id, career_id, project_id)
     
     return {"status": "pending", "message": "Pre-validación iniciada"}
 
-async def pre_validate_background(target_id: str, user_id: str, file_bytes: bytes, filename_lower: str, filename_real: str, uploaded_by: str = None, university_id: str = None, career_id: str = None):
+async def pre_validate_background(target_id: str, user_id: str, file_bytes: bytes, filename_lower: str, filename_real: str, uploaded_by: str = None, university_id: str = None, career_id: str = None, project_id: str = None):
     try:
         active_analysis_tasks[target_id] = asyncio.current_task()
         
@@ -436,7 +436,7 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
                 cluster_names = visualization_service.get_cluster_names()
                 assigned_cluster_name = cluster_names.get(str(cluster_id)) or cluster_names.get(cluster_id, f"Cluster {cluster_id}")
                 
-                exclusion_rules = config_manager.get_exclusion_rules()
+                exclusion_rules = config_manager.get_exclusion_rules(project_id)
                 
                 import unicodedata
                 def normalize_name(text):

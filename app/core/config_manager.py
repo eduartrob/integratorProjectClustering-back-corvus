@@ -7,11 +7,16 @@ logger = logging.getLogger(__name__)
 
 class ConfigManager:
     def __init__(self):
-        self.config_path = os.path.join(settings.CHROMA_DB_PATH, 'app_config.json')
+        self.default_config_path = os.path.join(settings.CHROMA_DB_PATH, 'app_config.json')
         self._ensure_default_config()
 
+    def _get_config_path(self, project_id: str = None) -> str:
+        if not project_id:
+            return self.default_config_path
+        return os.path.join(settings.CHROMA_DB_PATH, f'app_config_{project_id}.json')
+
     def _ensure_default_config(self):
-        if not os.path.exists(self.config_path):
+        if not os.path.exists(self.default_config_path):
             os.makedirs(settings.CHROMA_DB_PATH, exist_ok=True)
             default_config = {
                 "allowed_extensions": [".pdf", ".md", ".txt"],
@@ -23,12 +28,18 @@ class ConfigManager:
             }
             self.save_config(default_config)
 
-    def get_config(self):
+    def get_config(self, project_id: str = None):
+        config_path = self._get_config_path(project_id)
+        
+        # Si la configuración del proyecto no existe, retornar la configuración global
+        if project_id and not os.path.exists(config_path):
+            config_path = self.default_config_path
+
         try:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            logger.error(f"Error leyendo config: {e}")
+            logger.error(f"Error leyendo config ({config_path}): {e}")
             return {
                 "allowed_extensions": [".pdf", ".md", ".txt"],
                 "llm_provider": "ollama",
@@ -38,31 +49,32 @@ class ConfigManager:
                 "max_team_members": 5
             }
 
-    def save_config(self, config_data: dict):
+    def save_config(self, config_data: dict, project_id: str = None):
+        config_path = self._get_config_path(project_id)
         try:
-            with open(self.config_path, 'w', encoding='utf-8') as f:
+            with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, indent=4)
             return True
         except Exception as e:
-            logger.error(f"Error guardando config: {e}")
+            logger.error(f"Error guardando config ({config_path}): {e}")
             return False
 
-    def get_allowed_extensions(self):
-        return tuple(self.get_config().get("allowed_extensions", [".pdf", ".md", ".txt"]))
+    def get_allowed_extensions(self, project_id: str = None):
+        return tuple(self.get_config(project_id).get("allowed_extensions", [".pdf", ".md", ".txt"]))
 
-    def get_exclusion_rules(self):
-        return self.get_config().get("exclusion_rules", [])
+    def get_exclusion_rules(self, project_id: str = None):
+        return self.get_config(project_id).get("exclusion_rules", [])
 
-    def get_project_sections(self):
-        return self.get_config().get("project_sections", [])
+    def get_project_sections(self, project_id: str = None):
+        return self.get_config(project_id).get("project_sections", [])
 
-    def get_accepted_drive_folders(self):
-        return self.get_config().get("accepted_drive_folders", [])
+    def get_accepted_drive_folders(self, project_id: str = None):
+        return self.get_config(project_id).get("accepted_drive_folders", [])
 
-    def get_min_team_members(self):
-        return self.get_config().get("min_team_members", 1)
+    def get_min_team_members(self, project_id: str = None):
+        return self.get_config(project_id).get("min_team_members", 1)
 
-    def get_max_team_members(self):
-        return self.get_config().get("max_team_members", 5)
+    def get_max_team_members(self, project_id: str = None):
+        return self.get_config(project_id).get("max_team_members", 5)
 
 config_manager = ConfigManager()

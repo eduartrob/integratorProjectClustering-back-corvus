@@ -244,8 +244,12 @@ class ConfigUpdateRequest(BaseModel):
     authorId: Optional[str] = None
 
 @router.get("/config")
-async def get_system_config(response: Response, if_none_match: Optional[str] = Header(None)):
-    config_data = config_manager.get_config()
+async def get_system_config(
+    response: Response, 
+    projectId: Optional[str] = None, 
+    if_none_match: Optional[str] = Header(None)
+):
+    config_data = config_manager.get_config(projectId)
     
     # Generate ETag
     config_json = json.dumps(config_data, sort_keys=True)
@@ -259,8 +263,8 @@ async def get_system_config(response: Response, if_none_match: Optional[str] = H
     return config_data
 
 @router.post("/config")
-async def update_system_config(request: ConfigUpdateRequest):
-    old_config = config_manager.get_config()
+async def update_system_config(request: ConfigUpdateRequest, projectId: Optional[str] = None):
+    old_config = config_manager.get_config(projectId)
     
     new_config = {
         "allowed_extensions": request.allowed_extensions,
@@ -323,7 +327,7 @@ async def update_system_config(request: ConfigUpdateRequest):
         
     # ----------------------------------------
 
-    success = config_manager.save_config(new_config)
+    success = config_manager.save_config(new_config, projectId)
     if success:
         # Log to ActivityLog if authorId is provided
         if request.authorId and body_parts:
