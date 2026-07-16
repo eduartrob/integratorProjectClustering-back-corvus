@@ -163,6 +163,17 @@ class ClusteringEngineService:
         tasa_anomalia = (self.sse_anomalies_count / self.total_new_projects) * 100
         if tasa_anomalia >= 15.0 and self.total_new_projects >= 3:
             logger.warning(f"⚠️ ALERTA DE DERIVA: Tasa de anomalías alcanzó {tasa_anomalia:.1f}%. Se recomienda ejecutar el Clustering Global.")
+            try:
+                from app.services.rabbitmq_service import rabbitmq_service
+                rabbitmq_service.publish_progress(
+                    user_id="admin_all",
+                    type_event="drift_alert",
+                    progress=100,
+                    total=100,
+                    message=f"Tasa de Deriva Crítica ({tasa_anomalia:.1f}%). Ejecute el Clustering para re-balancear los mapas."
+                )
+            except Exception as ex:
+                logger.error(f"Error enviando alerta de deriva a RabbitMQ: {ex}")
 
         posicion_pct   = round(min((dist_nuevo / radio) * 100, 100), 1) if radio > 0 else 0.0
         innovacion_pct = round(100 - posicion_pct, 1)
@@ -225,97 +236,107 @@ class ClusteringEngineService:
                 if p_id not in projects_data:
                     projects_data[p_id] = {
                         'embeddings': [],
-                        'text': meta.get('text', '')  # Guarda texto para el LLM
+                        'text': meta.get('text', ''),
+                        'career_id': meta.get('career_id', 'global')
                     }
                 projects_data[p_id]['embeddings'].append(vectors[i])
-                # Concatenar un poco de texto para el LLM si es muy corto
                 if len(projects_data[p_id]['text']) < 1500:
                     projects_data[p_id]['text'] += " " + meta.get('text', '')
 
-            unique_ids = sorted(projects_data.keys())
-            if len(unique_ids) < 2:
-                logger.warning("[Clustering] No hay suficientes proyectos únicos.")
-                return False
+            # Group by career_id
+            careers_dict = {}
+            for p_id, p_data in projects_data.items():
+                c_id = p_data['career_id']
+                if c_id not in careers_dict:
+                    careers_dict[c_id] = []
+                careers_dict[c_id].append(p_id)
 
-            # Vector promedio por proyecto
-            aggregated_embeddings = [np.mean(projects_data[p]['embeddings'], axis=0) for p in unique_ids]
-            X = np.array(aggregated_embeddings)
+            global_cluster_offset = 0
 
-            # 2. PCA: 384D -> 10D
-            logger.info("[Clustering] Aplicando PCA...")
-            pca_dim = min(10, len(X) - 1)
-            if pca_dim < 2:
-                pca_dim = 2
-            pca = PCA(n_components=pca_dim, random_state=42)
-            X_pca = pca.fit_transform(X)
-
-            # 3. K Óptimo Dinámico (Silhouette + Elbow)
-            logger.info("[Clustering] Buscando K óptimo...")
-            siluetas = []
-            # Límite superior matemático: no más de N/2, máximo 20 (dinámico sin límite de 9)
-            max_k = min(20, max(3, len(X) // 2))
-            rango_k = range(2, max_k + 1)
-            
-            if len(X) > 2:
-                for k in rango_k:
-                    kmeans_temp = KMeans(n_clusters=k, random_state=42, n_init=10)
-                    kmeans_temp.fit(X_pca)
-                    siluetas.append(silhouette_score(X_pca, kmeans_temp.labels_))
-                k_optimo = rango_k[np.argmax(siluetas)]
-            else:
-                k_optimo = 2
-                
-            logger.info(f"[Clustering] K óptimo calculado: {k_optimo}")
-
-            # 4. K-Means Final
-            logger.info("[Clustering] Entrenando K-Means...")
-            self._kmeans = KMeans(n_clusters=k_optimo, random_state=42, n_init=10)
-            labels = self._kmeans.fit_predict(X_pca)
-            centroids = self._kmeans.cluster_centers_
-
-            # 5. Isolation Forest (Océanos Azules)
-            logger.info("[Clustering] Ejecutando Isolation Forest...")
-            from sklearn.ensemble import IsolationForest
-            # Usamos vectores originales para detectar nichos, igual que en su script
-            iso_forest = IsolationForest(contamination='auto', random_state=42, n_estimators=200)
-            etiquetas_iso = iso_forest.fit_predict(X)  # -1 (Nicho), 1 (Mainstream)
-
-            # 6. Nombrar Clústeres (LLM)
-            logger.info("[Clustering] Generando nombres de clústeres con LLM...")
-            from app.services.llm_client import llm_client
-            nombres_clusters = {}
-            for i in range(k_optimo):
-                puntos_cluster_idx = [idx for idx, label in enumerate(labels) if label == i]
-                if not puntos_cluster_idx:
-                    nombres_clusters[i] = f"Clúster {i}"
+            for career, unique_ids in careers_dict.items():
+                unique_ids = sorted(unique_ids)
+                if len(unique_ids) < 2:
+                    logger.warning(f"[Clustering] No hay suficientes proyectos para la carrera {career}.")
+                    for p_id in unique_ids:
+                        from app.services.qdrant_service import qdrant_service
+                        qdrant_service.update_project_payload(
+                            project_id=p_id,
+                            payload_data={
+                                "cluster_id": f"{career}_0",
+                                "cluster_name": "Proyectos Iniciales",
+                                "is_blue_ocean": False
+                            }
+                        )
                     continue
-                    
-                puntos_cluster = X_pca[puntos_cluster_idx]
-                distancias = np.linalg.norm(puntos_cluster - centroids[i], axis=1)
-                top_3_locales = np.argsort(distancias)[:3]
-                top_3_globales = [puntos_cluster_idx[idx] for idx in top_3_locales]
-                
-                textos_cercanos = [projects_data[unique_ids[idx]]['text'] for idx in top_3_globales]
-                
-                nombre_generado = await llm_client.generate_cluster_name(textos_cercanos)
-                nombres_clusters[i] = nombre_generado
-                logger.info(f"[Clustering] Clúster {i} nombrado: {nombre_generado}")
 
-            # 7. Actualización Masiva en Qdrant (Set Payload)
-            logger.info("[Clustering] Actualizando Qdrant payloads...")
-            for p_idx, p_id in enumerate(unique_ids):
-                c_id = int(labels[p_idx])
-                c_name = nombres_clusters[c_id]
-                is_blue_ocean = bool(etiquetas_iso[p_idx] == -1)
+                aggregated_embeddings = [np.mean(projects_data[p]['embeddings'], axis=0) for p in unique_ids]
+                X = np.array(aggregated_embeddings)
+
+                logger.info(f"[Clustering] Aplicando PCA para carrera {career}...")
+                pca_dim = min(10, len(X) - 1)
+                if pca_dim < 2:
+                    pca_dim = 2
+                pca = PCA(n_components=pca_dim, random_state=42)
+                X_pca = pca.fit_transform(X)
+
+                logger.info(f"[Clustering] Buscando K óptimo para carrera {career}...")
+                siluetas = []
+                max_k = min(20, max(3, len(X) // 2))
+                rango_k = range(2, max_k + 1)
                 
-                qdrant_service.update_project_payload(
-                    project_id=p_id,
-                    payload_data={
-                        "cluster_id": c_id,
-                        "cluster_name": c_name,
-                        "is_blue_ocean": is_blue_ocean
-                    }
-                )
+                if len(X) > 2:
+                    for k in rango_k:
+                        kmeans_temp = KMeans(n_clusters=k, random_state=42, n_init=10)
+                        kmeans_temp.fit(X_pca)
+                        siluetas.append(silhouette_score(X_pca, kmeans_temp.labels_))
+                    k_optimo = rango_k[np.argmax(siluetas)]
+                else:
+                    k_optimo = 2
+                    
+                logger.info(f"[Clustering] K óptimo calculado para {career}: {k_optimo}")
+
+                self._kmeans = KMeans(n_clusters=k_optimo, random_state=42, n_init=10)
+                labels = self._kmeans.fit_predict(X_pca)
+                centroids = self._kmeans.cluster_centers_
+
+                from sklearn.ensemble import IsolationForest
+                iso_forest = IsolationForest(contamination='auto', random_state=42, n_estimators=200)
+                etiquetas_iso = iso_forest.fit_predict(X)
+
+                from app.services.llm_client import llm_client
+                nombres_clusters = {}
+                for i in range(k_optimo):
+                    puntos_cluster_idx = [idx for idx, label in enumerate(labels) if label == i]
+                    if not puntos_cluster_idx:
+                        nombres_clusters[i] = f"Clúster {i}"
+                        continue
+                        
+                    puntos_cluster = X_pca[puntos_cluster_idx]
+                    distancias = np.linalg.norm(puntos_cluster - centroids[i], axis=1)
+                    top_3_locales = np.argsort(distancias)[:3]
+                    top_3_globales = [puntos_cluster_idx[idx] for idx in top_3_locales]
+                    
+                    textos_cercanos = [projects_data[unique_ids[idx]]['text'] for idx in top_3_globales]
+                    nombre_generado = await llm_client.generate_cluster_name(textos_cercanos)
+                    nombres_clusters[i] = nombre_generado
+                    logger.info(f"[Clustering] Clúster {i} ({career}) nombrado: {nombre_generado}")
+
+                logger.info(f"[Clustering] Actualizando Qdrant payloads para carrera {career}...")
+                for p_idx, p_id in enumerate(unique_ids):
+                    local_c_id = int(labels[p_idx])
+                    global_c_id = f"{career}_{local_c_id}"
+                    c_name = nombres_clusters[local_c_id]
+                    is_blue_ocean = bool(etiquetas_iso[p_idx] == -1)
+                    
+                    from app.services.qdrant_service import qdrant_service
+                    qdrant_service.update_project_payload(
+                        project_id=p_id,
+                        payload_data={
+                            "cluster_id": global_c_id,
+                            "cluster_name": c_name,
+                            "is_blue_ocean": is_blue_ocean
+                        }
+                    )
                 
             logger.info("[Clustering] Finalizado con éxito.")
             return True

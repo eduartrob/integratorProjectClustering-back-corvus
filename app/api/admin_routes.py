@@ -10,11 +10,36 @@ router = APIRouter()
 
 from typing import Optional, List, Dict
 
+@router.get("/careers", tags=["Admin Panel"])
+async def get_careers():
+    from app.services.qdrant_service import qdrant_service
+    try:
+        _, payloads = qdrant_service.get_all_embeddings()
+        careers = {}
+        if payloads:
+            for meta in payloads:
+                u_id = meta.get("university_id")
+                c_id = meta.get("career_id")
+                if u_id and c_id:
+                    if u_id not in careers:
+                        careers[u_id] = set()
+                    careers[u_id].add(c_id)
+        
+        result = []
+        for u, cs in careers.items():
+            result.append({
+                "university_id": u,
+                "careers": list(cs)
+            })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/clusters-3d", response_class=HTMLResponse, tags=["Admin Panel"])
-async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None):
+async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None, university_id: Optional[str] = None, career_id: Optional[str] = None):
     
     try:
-        html_content = visualization_service.generate_3d_html(filter_cluster_id=filter_cluster_id)
+        html_content = visualization_service.generate_3d_html(filter_cluster_id=filter_cluster_id, university_id=university_id, career_id=career_id)
         if "<h1>Error" in html_content:
             return HTMLResponse(content=html_content, status_code=500)
         return HTMLResponse(content=html_content, status_code=200)
@@ -22,9 +47,9 @@ async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/clusters-2d-html", response_class=HTMLResponse, tags=["Admin Panel"])
-async def get_clusters_2d_html(filter_cluster_id: Optional[str] = None):
+async def get_clusters_2d_html(filter_cluster_id: Optional[str] = None, university_id: Optional[str] = None, career_id: Optional[str] = None):
     try:
-        html_content = visualization_service.generate_2d_html(filter_cluster_id=filter_cluster_id)
+        html_content = visualization_service.generate_2d_html(filter_cluster_id=filter_cluster_id, university_id=university_id, career_id=career_id)
         if "<h1>Error" in html_content:
             return HTMLResponse(content=html_content, status_code=500)
         return HTMLResponse(content=html_content, status_code=200)
@@ -43,11 +68,11 @@ async def get_clusters_2d():
         raise HTTPException(status_code=500, detail=f"{str(e)}\n{tb}")
 
 @router.get("/clusters-stats", tags=["Admin Panel"])
-async def get_clusters_stats():
+async def get_clusters_stats(university_id: Optional[str] = None, career_id: Optional[str] = None):
     
     try:
         from app.services.clustering_service import clustering_engine
-        stats = visualization_service.get_cluster_stats()
+        stats = visualization_service.get_cluster_stats(university_id=university_id, career_id=career_id)
         if "error" in stats:
             raise HTTPException(status_code=500, detail=stats["error"])
         stats["is_clustering_running"] = clustering_engine.is_running
@@ -170,7 +195,9 @@ async def execute_clustering(background_tasks: BackgroundTasks):
                                 payloads=[{
                                     "project_id": p["id"],
                                     "text": chunk,
-                                    "source_url": p["source_url"]
+                                    "source_url": p["source_url"],
+                                    "university_id": p.get("university_id"),
+                                    "career_id": p.get("career_id")
                                 } for chunk in chunks]
                             )
                     # Quitar de pendientes y borrar el txt temporal

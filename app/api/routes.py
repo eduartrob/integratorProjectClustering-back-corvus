@@ -81,13 +81,24 @@ def process_folder_background(folder_id: str, access_token: str, user_id: str):
                 url_drive = f"https://drive.google.com/file/d/{file_id}/view"
                 
                 from app.services.pending_projects_db import pending_projects_db
+                from app.core.config_manager import config_manager
+                
+                # Obtener career_id y university_id desde la config para este folder
+                current_config = config_manager.get_config()
+                accepted_folders = current_config.get("accepted_drive_folders", [])
+                folder_info_cfg = next((f for f in accepted_folders if f.get("id") == folder_id), {})
+                career_id = folder_info_cfg.get("career_id")
+                university_id = folder_info_cfg.get("university_id")
+
                 pending_projects_db.add_pending_project(
                     project_id=project_id,
                     name=file_name.replace(".pdf", "").replace(".PDF", "").strip().title(),
                     raw_text=text,
-                    source_url=url_drive
+                    source_url=url_drive,
+                    university_id=university_id,
+                    career_id=career_id
                 )
-                print(f"✅ Documento marcado como pendiente: {project_id}", flush=True)
+                print(f"✅ Documento marcado como pendiente: {project_id} (Carrera: {career_id})", flush=True)
             except Exception as e:
                 print(f"❌ Error guardando {file_name} como pendiente: {e}", flush=True)
                 continue

@@ -15,7 +15,7 @@ class VisualizationService:
             '#80DEEA', '#FFCC02', '#FF8A65', '#A5D6A7', '#90CAF9'
         ]
 
-    def _get_data_from_db(self):
+    def _get_data_from_db(self, university_id=None, career_id=None):
         
         vectors, payloads = qdrant_service.get_all_embeddings()
         if not vectors or len(vectors) == 0:
@@ -23,6 +23,11 @@ class VisualizationService:
 
         projects_data = {}
         for i, meta in enumerate(payloads):
+            if university_id and meta.get('university_id') != university_id:
+                continue
+            if career_id and meta.get('career_id') != career_id:
+                continue
+
             p_id = meta.get('project_id')
             if not p_id:
                 continue
@@ -46,9 +51,9 @@ class VisualizationService:
         
         return unique_ids, np.array(aggregated_embeddings), labels, projects_data
 
-    def get_cluster_names(self):
+    def get_cluster_names(self, university_id=None, career_id=None):
         
-        unique_ids, _, labels, projects_data = self._get_data_from_db()
+        unique_ids, _, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return {}
 
@@ -76,9 +81,9 @@ class VisualizationService:
                 
         return cluster_names
 
-    def get_cluster_stats(self):
+    def get_cluster_stats(self, university_id=None, career_id=None):
         
-        unique_ids, _, labels, projects_data = self._get_data_from_db()
+        unique_ids, _, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return {
                 "total_projects": 0,
@@ -92,7 +97,7 @@ class VisualizationService:
         total_projects = len(unique_ids)
         blue_oceans = cluster_counts.get(-1, 0)
         
-        cluster_names = self.get_cluster_names()
+        cluster_names = self.get_cluster_names(university_id, career_id)
         
         clusters_info = []
         for cid, count in cluster_counts.items():
@@ -116,7 +121,7 @@ class VisualizationService:
         if not os.path.exists(self.umap_model_path):
             return []
 
-        unique_ids, embeddings_384d, labels, _ = self._get_data_from_db()
+        unique_ids, embeddings_384d, labels, _ = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return []
 
@@ -141,7 +146,7 @@ class VisualizationService:
         return scatter_data
 
     def generate_3d_html(self, filter_cluster_id: str = None):
-        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
+        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
@@ -154,7 +159,7 @@ class VisualizationService:
         except Exception as e:
             return f"<html><body><h1>Error de proyeccion</h1><p>{str(e)}</p></body></html>"
 
-        cluster_names = self.get_cluster_names()
+        cluster_names = self.get_cluster_names(university_id, career_id)
         fig = go.Figure()
         unique_labels = sorted(set(labels))
         cluster_labels_valid = [l for l in unique_labels if l != -1]
@@ -236,7 +241,7 @@ class VisualizationService:
         return fig.to_html(include_plotlyjs='cdn', full_html=True)
 
     def generate_2d_html(self, filter_cluster_id: str = None):
-        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
+        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
@@ -262,7 +267,7 @@ class VisualizationService:
                 [cy + sy * math.sin(2 * math.pi * i / n) for i in range(n + 1)]
             )
 
-        cluster_names = self.get_cluster_names()
+        cluster_names = self.get_cluster_names(university_id, career_id)
         fig = go.Figure()
         unique_labels = sorted(set(labels))
         cluster_labels_valid = [l for l in unique_labels if l != -1]
@@ -362,7 +367,7 @@ class VisualizationService:
 
 
     def get_minimap_data(self):
-        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
+        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return {"clusters": []}
 
@@ -376,7 +381,7 @@ class VisualizationService:
         except Exception as e:
             return {"clusters": []}
 
-        cluster_names = self.get_cluster_names()
+        cluster_names = self.get_cluster_names(university_id, career_id)
         unique_labels = sorted(set(labels))
         cluster_labels_valid = [l for l in unique_labels if l != -1]
 
