@@ -472,12 +472,7 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
             chunks = nlp_service.chunk_text(safe_text)
             embeddings = nlp_service.vectorize(chunks)
 
-            # Build context filter for isolated search
-            must_conditions = []
-            if university_id:
-                must_conditions.append({"key": "university_id", "match": {"value": university_id}})
-            if career_id:
-                must_conditions.append({"key": "career_id", "match": {"value": career_id}})
+            # Context filtering parameters (university_id, career_id) will be passed directly
 
             max_similitud_pct = 0.0
             similar_projects = []
@@ -485,7 +480,8 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
                 query_subset = embeddings[:5] if len(embeddings) > 5 else embeddings
                 search_results = qdrant_service.search_similar_multi(
                     query_embeddings=query_subset, n_results=3,
-                    must_conditions=must_conditions if must_conditions else None
+                    filter_university_id=university_id,
+                    filter_career_id=career_id
                 )
                 if search_results and search_results.get("documents"):
                     grouped_projects = {}

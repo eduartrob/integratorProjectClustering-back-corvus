@@ -264,6 +264,9 @@ async def get_system_config(
 
 @router.post("/config")
 async def update_system_config(request: ConfigUpdateRequest, projectId: Optional[str] = None):
+    if request.min_team_members > request.max_team_members:
+        raise HTTPException(status_code=400, detail="La cantidad mínima no puede ser mayor a la cantidad máxima.")
+
     old_config = config_manager.get_config(projectId)
     
     new_config = {
