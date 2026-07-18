@@ -31,13 +31,19 @@ class ConfigManager:
     def get_config(self, project_id: str = None):
         config_path = self._get_config_path(project_id)
         
+        is_fallback = False
         # Si la configuración del proyecto no existe, retornar la configuración global
         if project_id and not os.path.exists(config_path):
             config_path = self.default_config_path
+            is_fallback = True
 
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                if is_fallback:
+                    data["project_sections"] = []
+                    data["exclusion_rules"] = []
+                return data
         except Exception as e:
             logger.error(f"Error leyendo config ({config_path}): {e}")
             return {
@@ -63,11 +69,6 @@ class ConfigManager:
         return tuple(self.get_config(project_id).get("allowed_extensions", [".pdf", ".md", ".txt"]))
 
     def get_exclusion_rules(self, project_id: str = None):
-        if project_id:
-            # Only use exclusion rules if the project has its own config file
-            config_path = self._get_config_path(project_id)
-            if not os.path.exists(config_path):
-                return []
         return self.get_config(project_id).get("exclusion_rules", [])
 
 
