@@ -224,6 +224,7 @@ async def execute_clustering(background_tasks: BackgroundTasks):
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Header, Response
 from app.core.config_manager import config_manager
+from app.core.config import settings
 from pydantic import BaseModel
 import hashlib
 import json
@@ -250,6 +251,24 @@ async def get_system_config(
     if_none_match: Optional[str] = Header(None)
 ):
     config_data = config_manager.get_config(projectId)
+    
+    # If projectId given, override team members limit from the real DB value
+    if projectId:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/team-size"
+                )
+                if r.status_code == 200:
+                    proj_info = r.json()
+                    real_team_size = proj_info.get("team_size")
+                    if real_team_size is not None:
+                        config_data = dict(config_data)
+                        config_data["max_team_members"] = real_team_size
+                        if config_data.get("min_team_members", 1) > real_team_size:
+                            config_data["min_team_members"] = 1
+        except Exception as e:
+            logger.warning(f"No se pudo obtener team_size real del proyecto {projectId}: {e}")
     
     # Generate ETag
     config_json = json.dumps(config_data, sort_keys=True)
