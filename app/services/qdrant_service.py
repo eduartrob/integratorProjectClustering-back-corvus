@@ -106,6 +106,7 @@ class QdrantService:
         if filter_career_id:
             must_conditions.append(FieldCondition(key="career_id", match=MatchValue(value=filter_career_id)))
             
+        query_filter = None
         if must_conditions:
             query_filter = Filter(must=must_conditions)
 

@@ -63,7 +63,13 @@ class ConfigManager:
         return tuple(self.get_config(project_id).get("allowed_extensions", [".pdf", ".md", ".txt"]))
 
     def get_exclusion_rules(self, project_id: str = None):
+        if project_id:
+            # Only use exclusion rules if the project has its own config file
+            config_path = self._get_config_path(project_id)
+            if not os.path.exists(config_path):
+                return []
         return self.get_config(project_id).get("exclusion_rules", [])
+
 
     def get_project_sections(self, project_id: str = None):
         return self.get_config(project_id).get("project_sections", [])
