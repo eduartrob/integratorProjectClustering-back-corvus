@@ -34,7 +34,7 @@ class VisualizationService:
             if p_id not in projects_data:
                 projects_data[p_id] = {
                     'embeddings': [],
-                    'cluster_id': meta.get('cluster_id', 0),
+                    'cluster_id': str(meta.get('cluster_id', '-1')),
                     'is_blue_ocean': meta.get('is_blue_ocean', False),
                     'cluster_name': meta.get('cluster_name', '')
                 }
@@ -45,9 +45,9 @@ class VisualizationService:
         labels = []
         for p in unique_ids:
             if projects_data[p].get('is_blue_ocean', False):
-                labels.append(-1)
+                labels.append("-1")
             else:
-                labels.append(projects_data[p]['cluster_id'])
+                labels.append(str(projects_data[p]['cluster_id']))
         
         return unique_ids, np.array(aggregated_embeddings), labels, projects_data
 
@@ -95,13 +95,13 @@ class VisualizationService:
 
         cluster_counts = Counter(labels)
         total_projects = len(unique_ids)
-        blue_oceans = cluster_counts.get(-1, 0)
+        blue_oceans = cluster_counts.get("-1", 0)
         
         cluster_names = self.get_cluster_names(university_id, career_id)
         
         clusters_info = []
         for cid, count in cluster_counts.items():
-            if cid != -1:
+            if str(cid) != "-1":
                 clusters_info.append({
                     "cluster_id": cid, 
                     "project_count": count,
@@ -162,16 +162,12 @@ class VisualizationService:
         cluster_names = self.get_cluster_names(university_id, career_id)
         fig = go.Figure()
         unique_labels = sorted(set(labels))
-        cluster_labels_valid = [l for l in unique_labels if l != -1]
+        cluster_labels_valid = [str(l) for l in unique_labels if str(l) != "-1"]
 
         if filter_cluster_id == "blue_oceans":
             cluster_labels_valid = []
         elif filter_cluster_id is not None and filter_cluster_id != "global":
-            try:
-                target_id = int(filter_cluster_id)
-                cluster_labels_valid = [l for l in cluster_labels_valid if l == target_id]
-            except ValueError:
-                pass
+            cluster_labels_valid = [l for l in cluster_labels_valid if str(l) == str(filter_cluster_id)]
 
         for cluster_id in cluster_labels_valid:
             indices = [i for i, l in enumerate(labels) if l == cluster_id]
@@ -181,7 +177,11 @@ class VisualizationService:
                 f"<b>{unique_ids[i].replace('_', ' ').title()}</b><br>Cluster: {cluster_names.get(cluster_id, f'Clúster {cluster_id}')}"
                 for i in indices
             ]
-            color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
+            try:
+                c_idx = int(str(cluster_id).split('_')[-1])
+            except Exception:
+                c_idx = sum(ord(c) for c in str(cluster_id))
+            color = self.cluster_colors[c_idx % len(self.cluster_colors)]
 
             fig.add_trace(go.Scatter3d(
                 x=x, y=y, z=z, mode='markers+text',
@@ -270,16 +270,12 @@ class VisualizationService:
         cluster_names = self.get_cluster_names(university_id, career_id)
         fig = go.Figure()
         unique_labels = sorted(set(labels))
-        cluster_labels_valid = [l for l in unique_labels if l != -1]
+        cluster_labels_valid = [str(l) for l in unique_labels if str(l) != "-1"]
 
         if filter_cluster_id == "blue_oceans":
             cluster_labels_valid = []
         elif filter_cluster_id is not None and filter_cluster_id != "global":
-            try:
-                target_id = int(filter_cluster_id)
-                cluster_labels_valid = [l for l in cluster_labels_valid if l == target_id]
-            except ValueError:
-                pass
+            cluster_labels_valid = [l for l in cluster_labels_valid if str(l) == str(filter_cluster_id)]
 
         # Outer + inner ellipses per cluster (KDE-style)
         for cluster_id in cluster_labels_valid:
@@ -287,7 +283,11 @@ class VisualizationService:
             if len(indices) < 3:
                 continue
             pts = embeddings_2d[indices]
-            color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
+            try:
+                c_idx = int(str(cluster_id).split('_')[-1])
+            except Exception:
+                c_idx = sum(ord(c) for c in str(cluster_id))
+            color = self.cluster_colors[c_idx % len(self.cluster_colors)]
             cx, cy = float(pts[:, 0].mean()), float(pts[:, 1].mean())
             sx = float(pts[:, 0].std()) * 2.4
             sy = float(pts[:, 1].std()) * 2.4
@@ -308,7 +308,11 @@ class VisualizationService:
         for cluster_id in cluster_labels_valid:
             indices = [i for i, l in enumerate(labels) if l == cluster_id]
             x, y = embeddings_2d[indices, 0], embeddings_2d[indices, 1]
-            color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
+            try:
+                c_idx = int(str(cluster_id).split('_')[-1])
+            except Exception:
+                c_idx = sum(ord(c) for c in str(cluster_id))
+            color = self.cluster_colors[c_idx % len(self.cluster_colors)]
             hover_texts = [
                 f"<b>{unique_ids[i].replace('_', ' ').title()}</b><br>Clúster: {cluster_names.get(cluster_id, f'Clúster {cluster_id}')}"
                 for i in indices
@@ -391,7 +395,11 @@ class VisualizationService:
             if not indices:
                 continue
             pts = embeddings_2d[indices]
-            color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
+            try:
+                c_idx = int(str(cluster_id).split('_')[-1])
+            except Exception:
+                c_idx = sum(ord(c) for c in str(cluster_id))
+            color = self.cluster_colors[c_idx % len(self.cluster_colors)]
             cx, cy = float(pts[:, 0].mean()), float(pts[:, 1].mean())
             name = cluster_names.get(cluster_id, f"Cluster {cluster_id}")
             minimap_clusters.append({

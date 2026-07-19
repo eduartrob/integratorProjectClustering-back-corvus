@@ -21,6 +21,7 @@ class ConfigManager:
             default_config = {
                 "allowed_extensions": [".pdf", ".md", ".txt"],
                 "llm_provider": "ollama",
+                "groq_model": "llama-3.1-8b-instant",
                 "exclusion_rules": [],
                 "project_sections": [],
                 "min_team_members": 1,

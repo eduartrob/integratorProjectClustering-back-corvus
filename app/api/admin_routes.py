@@ -234,6 +234,7 @@ from typing import List, Dict, Any, Optional
 class ConfigUpdateRequest(BaseModel):
     allowed_extensions: list[str]
     llm_provider: str = "ollama"
+    groq_model: Optional[str] = "llama-3.1-8b-instant"
     drive_folder_id: str = ""
     accepted_drive_folders: List[Dict[str, str]] = []
     exclusion_rules: List[str] = []
@@ -281,6 +282,17 @@ async def get_system_config(
     response.headers["ETag"] = etag
     return config_data
 
+@router.get("/groq-models")
+async def get_groq_models():
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(f"{settings.LLM_SERVICE_URL}/api/v1/llm/groq-models")
+            res.raise_for_status()
+            return res.json()
+    except Exception as e:
+        logger.error(f"Error fetching groq models: {e}")
+        return {"status": "error", "data": []}
+
 @router.post("/config")
 async def update_system_config(request: ConfigUpdateRequest, projectId: Optional[str] = None):
     if request.min_team_members > request.max_team_members:
@@ -291,6 +303,7 @@ async def update_system_config(request: ConfigUpdateRequest, projectId: Optional
     new_config = {
         "allowed_extensions": request.allowed_extensions,
         "llm_provider": request.llm_provider,
+        "groq_model": request.groq_model,
         "drive_folder_id": request.drive_folder_id,
         "accepted_drive_folders": request.accepted_drive_folders,
         "exclusion_rules": request.exclusion_rules,

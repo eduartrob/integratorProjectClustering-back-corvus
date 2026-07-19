@@ -125,7 +125,7 @@ class ClusteringEngineService:
         vec_nuevo = np.array(vector_nuevo).reshape(1, -1)
 
         unique_labels = sorted(set(labels))
-        valid_labels = [l for l in unique_labels if l != -1]
+        valid_labels = [l for l in unique_labels if str(l) != "-1"]
         
         if not valid_labels:
             return {"error": "No hay clusters válidos en Qdrant", "cluster_id": -1, "innovacion_pct": 50.0}
@@ -138,7 +138,7 @@ class ClusteringEngineService:
         centroids = np.array(centroids)
         distances = np.linalg.norm(centroids - vec_nuevo, axis=1)
         closest_idx = int(np.argmin(distances))
-        cluster_id = int(valid_labels[closest_idx])
+        cluster_id = str(valid_labels[closest_idx])
         centroide = centroids[closest_idx]
         
         k = len(valid_labels)
