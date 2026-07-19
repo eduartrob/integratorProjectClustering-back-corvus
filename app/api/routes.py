@@ -217,7 +217,7 @@ async def check_blue_ocean(project_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/blue-ocean-niches")
-async def get_blue_ocean_niches():
+async def get_blue_ocean_niches(page: int = 1, limit: int = 10):
     
     from app.services.qdrant_service import qdrant_service
     from app.services.blue_ocean_db import blue_ocean_db
@@ -259,18 +259,26 @@ async def get_blue_ocean_niches():
                 "_gravity_score": gravity_score
             })
             
+
         niches.sort(key=lambda x: x['_gravity_score'], reverse=True)
         
         for niche in niches:
             niche.pop('_gravity_score', None)
             
-    except Exception as e:
-        print(f"Error extrayendo los océanos azules desde ChromaDB: {e}")
+        # Paginación
+        total = len(niches)
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        niches = niches[start_idx:end_idx]
         
-    if not niches:
+    except Exception as e:
+
+        print(f"Error extrayendo los océanos azules desde ChromaDB: {e}")
+    if not niches and page == 1:
         niches = [
             {
                 "category": "MÉTRICA VACÍA",
+
                 "tag": "Requiere Ejecución",
                 "title": "Aún no hay Océanos Azules",
                 "description": "El algoritmo de clustering global aún no ha detectado proyectos con suficiente originalidad semántica o se requiere ejecutar un análisis con un mayor volumen de documentos."
