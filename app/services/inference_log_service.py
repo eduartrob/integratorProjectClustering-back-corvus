@@ -32,7 +32,7 @@ def _init_db():
             )
         """)
         # Add columns for minimap safely
-        for col, col_def in [("cluster_id", "INTEGER"), ("coord_x", "REAL"), ("coord_y", "REAL")]:
+        for col, col_def in [("cluster_id", "TEXT"), ("coord_x", "REAL"), ("coord_y", "REAL")]:
             try:
                 conn.execute(f"ALTER TABLE inference_log ADD COLUMN {col} {col_def}")
             except sqlite3.OperationalError:
@@ -48,7 +48,7 @@ def log_inference(
     veredicto: str = None,
     secciones_faltantes: list = None,
     secciones_opcionales: list = None,
-    cluster_id: int = None,
+    cluster_id = None,  # str or int — now supports UUID-based cluster IDs
     coord_x: float = None,
     coord_y: float = None,
 ) -> int:
@@ -73,7 +73,7 @@ def log_inference(
                 veredicto,
                 ", ".join(secciones_faltantes) if secciones_faltantes else "",
                 ", ".join(secciones_opcionales) if secciones_opcionales else "",
-                cluster_id,
+                str(cluster_id) if cluster_id is not None else None,
                 coord_x,
                 coord_y,
             ),
