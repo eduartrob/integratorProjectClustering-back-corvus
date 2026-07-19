@@ -20,7 +20,7 @@ class ConfigManager:
             os.makedirs(settings.CHROMA_DB_PATH, exist_ok=True)
             default_config = {
                 "allowed_extensions": [".pdf", ".md", ".txt"],
-                "llm_provider": "ollama",
+                "llm_provider": "groq",
                 "groq_model": "llama-3.1-8b-instant",
                 "exclusion_rules": [],
                 "project_sections": [],
@@ -49,7 +49,7 @@ class ConfigManager:
             logger.error(f"Error leyendo config ({config_path}): {e}")
             return {
                 "allowed_extensions": [".pdf", ".md", ".txt"],
-                "llm_provider": "ollama",
+                "llm_provider": "groq",
                 "exclusion_rules": [],
                 "project_sections": [],
                 "min_team_members": 1,
