@@ -30,7 +30,7 @@ class LlmClient:
 
             logger.info(f"[LlmClient] Enviando propuesta a {settings.LLM_SERVICE_URL}/api/v1/llm/analyze-proposal (Provider: {llm_provider})")
             
-            async with httpx.AsyncClient(timeout=None) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
                 response = await client.post(
                     f"{settings.LLM_SERVICE_URL}/api/v1/llm/analyze-proposal",
                     json={
@@ -94,7 +94,7 @@ class LlmClient:
 
             logger.info(f"[LlmClient] Generando nombre de cluster con {llm_provider}")
             
-            async with httpx.AsyncClient(timeout=None) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
                 response = await client.post(
                     f"{settings.LLM_SERVICE_URL}/api/v1/llm/generate-name",
                     json={"prompt": prompt, "provider": llm_provider, "groq_model": groq_model}

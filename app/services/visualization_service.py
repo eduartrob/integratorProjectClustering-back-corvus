@@ -9,7 +9,6 @@ import os
 
 class VisualizationService:
     def __init__(self):
-        self.umap_model_path = os.path.join(settings.MODELS_DIR, "umap_50d_model.joblib")
         self.cluster_colors = [
             '#4FC3F7', '#FFB74D', '#81C784', '#F06292', '#CE93D8',
             '#80DEEA', '#FFCC02', '#FF8A65', '#A5D6A7', '#90CAF9'
@@ -118,19 +117,16 @@ class VisualizationService:
 
     def get_2d_scatter_data(self, university_id=None, career_id=None):
         
-        if not os.path.exists(self.umap_model_path):
-            return []
-
         unique_ids, embeddings_384d, labels, _ = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return []
 
         try:
-            reducer_clustering = joblib.load(self.umap_model_path)
-            embeddings_20d = reducer_clustering.transform(embeddings_384d)
-            
-            reducer_2d = umap.UMAP(n_components=2, n_neighbors=12, min_dist=0.05, metric='euclidean', random_state=42)
-            embeddings_2d = reducer_2d.fit_transform(embeddings_20d)
+            n_neighbors = min(12, len(embeddings_384d) - 1)
+            if n_neighbors < 2:
+                n_neighbors = 2
+            reducer_2d = umap.UMAP(n_components=2, n_neighbors=n_neighbors, min_dist=0.05, metric='cosine', random_state=42)
+            embeddings_2d = reducer_2d.fit_transform(embeddings_384d)
         except Exception:
             return []
 
