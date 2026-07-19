@@ -206,6 +206,8 @@ class ClusteringEngineService:
         """
         Re-entrena el K-Means con todos los proyectos del corpus vivos en Qdrant,
         calculando todo dinámicamente: K óptimo, Isolation Forest para océanos azules, y LLM para nombres.
+        Los clusters que ya tienen nombre y cuyo centroide es similar al nuevo (coseno ≥ 0.88)
+        conservan su nombre SIN llamar al LLM. Solo los clusters genuinamente nuevos piden nombre.
         """
         if self.is_running:
             logger.warning("[Clustering] Clustering ya está en ejecución.")
@@ -237,7 +239,8 @@ class ClusteringEngineService:
                     projects_data[p_id] = {
                         'embeddings': [],
                         'text': meta.get('text', ''),
-                        'career_id': meta.get('career_id', 'global')
+                        'career_id': meta.get('career_id', 'global'),
+                        'prev_cluster_name': meta.get('cluster_name', '')  # nombre previo
                     }
                 projects_data[p_id]['embeddings'].append(vectors[i])
                 if len(projects_data[p_id]['text']) < 1500:
@@ -250,8 +253,6 @@ class ClusteringEngineService:
                 if c_id not in careers_dict:
                     careers_dict[c_id] = []
                 careers_dict[c_id].append(p_id)
-
-            global_cluster_offset = 0
 
             for career, unique_ids in careers_dict.items():
                 unique_ids = sorted(unique_ids)
@@ -303,6 +304,11 @@ class ClusteringEngineService:
                 iso_forest = IsolationForest(contamination='auto', random_state=42, n_estimators=200)
                 etiquetas_iso = iso_forest.fit_predict(X)
 
+                # ── Recuperar nombres existentes (en espacio 384d) para reutilizar ──
+                existing_named_clusters = self._extract_existing_cluster_names(
+                    projects_data, unique_ids, X
+                )
+
                 from app.services.llm_client import llm_client
                 nombres_clusters = {}
                 for i in range(k_optimo):
@@ -310,7 +316,21 @@ class ClusteringEngineService:
                     if not puntos_cluster_idx:
                         nombres_clusters[i] = f"Clúster {i}"
                         continue
+                    
+                    # Centroide nuevo en espacio original 384d
+                    centroide_384d = np.mean(X[puntos_cluster_idx], axis=0)
+                    
+                    # Intentar reutilizar nombre existente por similitud coseno (≥ 0.88)
+                    nombre_reutilizado = self._match_existing_name(
+                        centroide_384d, existing_named_clusters, threshold=0.88
+                    )
+                    
+                    if nombre_reutilizado:
+                        nombres_clusters[i] = nombre_reutilizado
+                        logger.info(f"[Clustering] Clúster {i} ({career}) → nombre reutilizado: '{nombre_reutilizado}'")
+                        continue
                         
+                    # No hay match → pedir nombre nuevo al LLM solo para este grupo genuinamente nuevo
                     puntos_cluster = X_pca[puntos_cluster_idx]
                     distancias = np.linalg.norm(puntos_cluster - centroids[i], axis=1)
                     top_3_locales = np.argsort(distancias)[:3]
@@ -319,7 +339,7 @@ class ClusteringEngineService:
                     textos_cercanos = [projects_data[unique_ids[idx]]['text'] for idx in top_3_globales]
                     nombre_generado = await llm_client.generate_cluster_name(textos_cercanos)
                     nombres_clusters[i] = nombre_generado
-                    logger.info(f"[Clustering] Clúster {i} ({career}) nombrado: {nombre_generado}")
+                    logger.info(f"[Clustering] Clúster {i} ({career}) → nuevo nombre LLM: '{nombre_generado}'")
 
                 logger.info(f"[Clustering] Actualizando Qdrant payloads para carrera {career}...")
                 for p_idx, p_id in enumerate(unique_ids):
@@ -349,6 +369,64 @@ class ClusteringEngineService:
             return False
         finally:
             self.is_running = False
+
+    # ── Auxiliares para nombres persistentes ──────────────────────────────────
+
+    def _extract_existing_cluster_names(
+        self, projects_data: dict, unique_ids: list, X: np.ndarray
+    ) -> list:
+        """
+        Devuelve lista de (centroide_384d, nombre) agrupando los proyectos
+        por su cluster_name previo almacenado en projects_data (antes del re-clustering).
+        Solo incluye nombres que no sean genéricos ('Clúster N', 'Proyectos Iniciales').
+        """
+        name_to_embeddings: dict = {}
+        for idx, p_id in enumerate(unique_ids):
+            name = projects_data[p_id].get('prev_cluster_name', '').strip()
+            if not name or name.startswith('Clúster ') or name == 'Proyectos Iniciales':
+                continue
+            if name not in name_to_embeddings:
+                name_to_embeddings[name] = []
+            name_to_embeddings[name].append(X[idx])
+
+        result = []
+        for name, embs in name_to_embeddings.items():
+            if embs:
+                centroide = np.mean(embs, axis=0)
+                result.append((centroide, name))
+
+        logger.info(f"[Clustering] {len(result)} nombres de clusters existentes disponibles para reutilizar.")
+        return result
+
+    def _match_existing_name(
+        self, new_centroid: np.ndarray, existing: list, threshold: float = 0.88
+    ) -> "str | None":
+        """
+        Compara el centroide nuevo (384d) con los centroides de clusters existentes con nombre.
+        Retorna el nombre si hay similitud coseno >= threshold, de lo contrario None.
+        """
+        if not existing:
+            return None
+
+        best_sim = -1.0
+        best_name = None
+        norm_new = float(np.linalg.norm(new_centroid))
+        if norm_new == 0:
+            return None
+
+        for centroid_old, name in existing:
+            norm_old = float(np.linalg.norm(centroid_old))
+            if norm_old == 0:
+                continue
+            sim = float(np.dot(new_centroid, centroid_old) / (norm_new * norm_old))
+            if sim > best_sim:
+                best_sim = sim
+                best_name = name
+
+        if best_sim >= threshold:
+            logger.info(f"[Clustering] Match de centroide encontrado (sim={best_sim:.3f}): '{best_name}'")
+            return best_name
+        return None
 
     # ── Compatibilidad con código viejo ──────────────────────────────────────
     def perform_clustering(self, embeddings, n_clusters=5):
