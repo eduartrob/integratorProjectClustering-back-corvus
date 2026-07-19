@@ -10,6 +10,8 @@ import json
 import numpy as np
 import httpx
 
+import logging
+logger = logging.getLogger(__name__)
 from app.services.drive_service import drive_service
 from app.services.nlp_service import nlp_service
 from app.services.qdrant_service import qdrant_service
