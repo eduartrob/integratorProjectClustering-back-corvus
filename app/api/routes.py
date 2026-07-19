@@ -810,17 +810,31 @@ async def _run_analysis_background(user_id: str, draft_path: str):
             # Preservar estructura de secciones Markdown (los chunks ya vienen separados por # Sección)
             full_proposal_text = "\n\n".join(chunks)
             
-            # --- OPTIMIZACIÓN: Extracción Selectiva (Smart Extraction) ---
+            # --- OPTIMIZACIÓN: Extracción Selectiva (Smart Extraction) Dinámica ---
             # Dividimos por encabezados Markdown
             bloques = re.split(r'\n(?=#+ )', full_proposal_text)
-            keywords_importantes = ['problema', 'objetivo', 'justificaci', 'alcance', 'resumen', 'introducci', 'hipotesis', 'metodolog']
+            
+            # Obtener los nombres reales de las secciones que validó el profesor
+            secciones_encontradas = quick_analysis.get("secciones_encontradas", [])
+            # Convertimos a minúsculas y quitamos acentos para hacer matching flexible
+            import unicodedata
+            def normalize_kw(text):
+                return ''.join(c for c in unicodedata.normalize('NFD', text.lower()) if unicodedata.category(c) != 'Mn')
+            
+            keywords_dinamicos = [normalize_kw(sec) for sec in secciones_encontradas]
+            # Fallback por si la validación previa falló o está vacía
+            if not keywords_dinamicos:
+                keywords_dinamicos = ['problema', 'objetivo', 'justificaci', 'alcance', 'resumen', 'introducci']
+                
             secciones_relevantes = []
             
             for bloque in bloques:
                 # Extraemos solo el título (primera línea del bloque)
-                titulo_lower = bloque.strip().split('\n')[0].lower()
-                # Si no tiene título (ej. el primer bloque si no empieza con #), o si coincide con palabras clave
-                if not titulo_lower.startswith('#') or any(kw in titulo_lower for kw in keywords_importantes):
+                titulo_crudo = bloque.strip().split('\n')[0]
+                titulo_norm = normalize_kw(titulo_crudo)
+                
+                # Si no tiene título (ej. el primer bloque si no empieza con #), o si el título normalizado contiene alguna de las palabras clave dinámicas
+                if not titulo_crudo.startswith('#') or any(kw in titulo_norm for kw in keywords_dinamicos):
                     secciones_relevantes.append(bloque.strip())
             
             if len(secciones_relevantes) > 0:
