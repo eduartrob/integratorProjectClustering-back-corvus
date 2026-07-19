@@ -637,7 +637,10 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
         analysis_progress_store[target_id] = {"phase": 9, "message": "Pre-validación exitosa", "uploaded_by": uploaded_by}
 
     except Exception as e:
-        error_msg = str(e).replace('Exception: ', '').replace('Exception ', '')
+        import traceback
+        full_trace = traceback.format_exc()
+        logger.error(f"[pre_validate_background] ERROR COMPLETO:\n{full_trace}")
+        error_msg = f"{str(e)}\n\nTraceback:\n{full_trace}"
         analysis_progress_store[target_id] = {"phase": -1, "message": error_msg, "uploaded_by": uploaded_by}
     finally:
         active_analysis_tasks.pop(target_id, None)
