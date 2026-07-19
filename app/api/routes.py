@@ -813,7 +813,7 @@ async def _run_analysis_background(user_id: str, draft_path: str):
             clean_proposal = re.sub(r'<[^>]+>', '', full_proposal_text)
             clean_proposal = re.sub(r'[ \t]{2,}', ' ', clean_proposal)
             clean_proposal = re.sub(r'\n{3,}', '\n\n', clean_proposal).strip()
-            proposal_text = clean_proposal[:12000] if len(clean_proposal) > 12000 else clean_proposal
+            proposal_text = clean_proposal[:8500] if len(clean_proposal) > 8500 else clean_proposal
             logger.info(f"[_run_analysis_background] proposal_text: {len(proposal_text)} chars, {proposal_text.count(chr(10))} saltos de línea")
 
             max_sim_pct = quick_analysis.get("collision_risk_pct", 0.0)
