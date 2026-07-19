@@ -315,10 +315,11 @@ async def update_system_config(request: ConfigUpdateRequest, projectId: Optional
     if projectId:
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                await client.patch(
+                res = await client.patch(
                     f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/team-size",
                     json={"team_size": request.max_team_members}
                 )
+                res.raise_for_status()
         except Exception as e:
             logger.warning(f"No se pudo actualizar team_size en proyecto {projectId}: {e}")
 
