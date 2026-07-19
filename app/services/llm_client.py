@@ -56,9 +56,7 @@ class LlmClient:
                 data = response.json()
                 
                 if data.get("actual_model_used") and data["actual_model_used"] != groq_model:
-                    logger.info(f"[LlmClient] Fallback model used: {data['actual_model_used']}. Updating config.")
-                    current_config["groq_model"] = data["actual_model_used"]
-                    config_manager.save_config(current_config)
+                    logger.info(f"Fallback model used: {data['actual_model_used']}")
 
                 return data
 
@@ -103,9 +101,7 @@ class LlmClient:
                     data = response.json()
                     
                     if data.get("actual_model_used") and data["actual_model_used"] != groq_model:
-                        logger.info(f"[LlmClient] Fallback model used: {data['actual_model_used']}. Updating config.")
-                        current_config["groq_model"] = data["actual_model_used"]
-                        config_manager.save_config(current_config)
+                        logger.info(f"Fallback model used: {data['actual_model_used']}")
                         
                     raw_name = data.get("name", "Tema Tecnológico").strip('"\' *-\n')
                     import re
