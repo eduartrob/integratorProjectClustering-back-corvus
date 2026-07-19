@@ -701,12 +701,12 @@ async def _run_analysis_background(user_id: str, draft_path: str):
             similar_projects = draft_data.get("similar_projects", [])
             for p in similar_projects:
                 if "content" in p and p["content"]:
-                    p["content"] = p["content"][:1500] + "..." if len(p["content"]) > 1500 else p["content"]
+                    p["content"] = p["content"][:800] + "..." if len(p["content"]) > 800 else p["content"]
             quick_analysis = draft_data.get("quick_analysis", {})
             project_id = draft_data.get("project_id")
 
             full_proposal_text = " ".join(chunks)
-            proposal_text = full_proposal_text[:12000] if len(full_proposal_text) > 12000 else full_proposal_text
+            proposal_text = full_proposal_text[:8000] if len(full_proposal_text) > 8000 else full_proposal_text
 
             max_sim_pct = quick_analysis.get("collision_risk_pct", 0.0)
             top_project_name = similar_projects[0]["title"] if similar_projects else "Ninguno"
