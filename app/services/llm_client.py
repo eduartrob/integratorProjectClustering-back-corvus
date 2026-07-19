@@ -26,7 +26,7 @@ class LlmClient:
             from app.core.config_manager import config_manager
             current_config = config_manager.get_config(project_id)
             llm_provider = current_config.get("llm_provider", "ollama")
-            groq_model = current_config.get("groq_model", "llama-3.1-8b-instant")
+            groq_model = current_config.get("groq_model", "llama-3.3-70b-versatile")
 
             logger.info(f"[LlmClient] Enviando propuesta a {settings.LLM_SERVICE_URL}/api/v1/llm/analyze-proposal (Provider: {llm_provider})")
             
@@ -82,7 +82,7 @@ class LlmClient:
             from app.core.config_manager import config_manager
             current_config = config_manager.get_config(project_id)
             llm_provider = current_config.get("llm_provider", "ollama")
-            groq_model = current_config.get("groq_model", "llama-3.1-8b-instant")
+            groq_model = current_config.get("groq_model", "llama-3.3-70b-versatile")
 
             prompt = (
                 "Analiza estos fragmentos de proyectos académicos de ingeniería de software "
