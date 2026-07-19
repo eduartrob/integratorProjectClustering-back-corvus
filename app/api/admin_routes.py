@@ -379,7 +379,6 @@ async def update_system_config(request: ConfigUpdateRequest, projectId: Optional
         # Log to ActivityLog if authorId is provided
         if request.authorId and body_parts:
             try:
-                import httpx
                 async with httpx.AsyncClient() as client:
                     await client.post(
                         "http://authentication-back-corvus:3000/internal/activity-log",
