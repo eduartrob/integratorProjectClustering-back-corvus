@@ -139,7 +139,7 @@ class VisualizationService:
             scatter_data.append({
                 "x": float(embeddings_2d[i, 0]),
                 "y": float(embeddings_2d[i, 1]),
-                "label": int(labels[i]),
+                "label": int(labels[i].split('_')[-1]) if labels[i].split('_')[-1].lstrip('-').isdigit() else hash(labels[i]) % 100,
                 "name": unique_ids[i].replace('_', ' ').title()
             })
             

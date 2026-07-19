@@ -343,9 +343,9 @@ class ClusteringEngineService:
 
                 logger.info(f"[Clustering] Actualizando Qdrant payloads para carrera {career}...")
                 for p_idx, p_id in enumerate(unique_ids):
-                    local_c_id = int(labels[p_idx])
+                    local_c_id = int(labels[p_idx]) if str(labels[p_idx]).lstrip('-').isdigit() else labels[p_idx]
                     global_c_id = f"{career}_{local_c_id}"
-                    c_name = nombres_clusters[local_c_id]
+                    c_name = nombres_clusters.get(local_c_id, nombres_clusters.get(str(local_c_id), f"Clúster {local_c_id}"))
                     is_blue_ocean = bool(etiquetas_iso[p_idx] == -1)
                     
                     from app.services.qdrant_service import qdrant_service
