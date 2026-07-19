@@ -698,15 +698,20 @@ async def _run_analysis_background(user_id: str, draft_path: str):
 
             chunks = draft_data.get("chunks", [])
 
+            import re
             similar_projects = draft_data.get("similar_projects", [])
             for p in similar_projects:
                 if "content" in p and p["content"]:
-                    p["content"] = p["content"][:800] + "..." if len(p["content"]) > 800 else p["content"]
+                    clean_content = re.sub(r'<[^>]+>|[\*\|-]', ' ', p["content"])
+                    clean_content = re.sub(r'\s+', ' ', clean_content).strip()
+                    p["content"] = clean_content[:800] + "..." if len(clean_content) > 800 else clean_content
             quick_analysis = draft_data.get("quick_analysis", {})
             project_id = draft_data.get("project_id")
 
             full_proposal_text = " ".join(chunks)
-            proposal_text = full_proposal_text[:8000] if len(full_proposal_text) > 8000 else full_proposal_text
+            clean_proposal = re.sub(r'<[^>]+>|[\*\|-]', ' ', full_proposal_text)
+            clean_proposal = re.sub(r'\s+', ' ', clean_proposal).strip()
+            proposal_text = clean_proposal[:8000] if len(clean_proposal) > 8000 else clean_proposal
 
             max_sim_pct = quick_analysis.get("collision_risk_pct", 0.0)
             top_project_name = similar_projects[0]["title"] if similar_projects else "Ninguno"
