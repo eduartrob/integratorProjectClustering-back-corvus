@@ -628,7 +628,8 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
             "chunks": chunks,
             "similar_projects": similar_projects,
             "quick_analysis": quick_analysis,
-            "uploaded_by": uploaded_by
+            "uploaded_by": uploaded_by,
+            "project_id": project_id
         }
         with open(draft_path, "w", encoding="utf-8") as f:
             json.dump(draft_data, f, ensure_ascii=False)
@@ -698,6 +699,7 @@ async def _run_analysis_background(user_id: str, draft_path: str):
             chunks = draft_data.get("chunks", [])
             similar_projects = draft_data.get("similar_projects", [])
             quick_analysis = draft_data.get("quick_analysis", {})
+            project_id = draft_data.get("project_id")
 
             full_proposal_text = " ".join(chunks)
             proposal_text = full_proposal_text[:12000] if len(full_proposal_text) > 12000 else full_proposal_text
@@ -725,6 +727,7 @@ async def _run_analysis_background(user_id: str, draft_path: str):
                 risk_level=risk_level,
                 project_name="PROPUESTA_DEL_ALUMNO",
                 top_project_name=top_project_name,
+                project_id=project_id
             )
 
             analysis_progress_store[user_id] = {"phase": 7, "message": "Generando recomendaciones técnicas..."}

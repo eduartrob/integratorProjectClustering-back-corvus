@@ -21,10 +21,10 @@ class LlmClient:
 
     async def analyze_originality(self, proposal_text: str, similar_projects: list,
                              max_sim_pct: float = 0.0, risk_level: str = "Bajo",
-                             project_name: str = "NUEVA_PROPUESTA", top_project_name: str = "Ninguno") -> dict:
+                             project_name: str = "NUEVA_PROPUESTA", top_project_name: str = "Ninguno", project_id: str = None) -> dict:
         try:
             from app.core.config_manager import config_manager
-            current_config = config_manager.get_config()
+            current_config = config_manager.get_config(project_id)
             llm_provider = current_config.get("llm_provider", "ollama")
             groq_model = current_config.get("groq_model", "llama-3.1-8b-instant")
 
@@ -80,7 +80,7 @@ class LlmClient:
     async def generate_cluster_name(self, sample_texts: list) -> str:
         try:
             from app.core.config_manager import config_manager
-            current_config = config_manager.get_config()
+            current_config = config_manager.get_config(project_id)
             llm_provider = current_config.get("llm_provider", "ollama")
             groq_model = current_config.get("groq_model", "llama-3.1-8b-instant")
 
