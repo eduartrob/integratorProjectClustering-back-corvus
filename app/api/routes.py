@@ -809,12 +809,30 @@ async def _run_analysis_background(user_id: str, draft_path: str):
 
             # Preservar estructura de secciones Markdown (los chunks ya vienen separados por # Sección)
             full_proposal_text = "\n\n".join(chunks)
+            
+            # --- OPTIMIZACIÓN: Extracción Selectiva (Smart Extraction) ---
+            # Dividimos por encabezados Markdown
+            bloques = re.split(r'\n(?=#+ )', full_proposal_text)
+            keywords_importantes = ['problema', 'objetivo', 'justificaci', 'alcance', 'resumen', 'introducci', 'hipotesis', 'metodolog']
+            secciones_relevantes = []
+            
+            for bloque in bloques:
+                # Extraemos solo el título (primera línea del bloque)
+                titulo_lower = bloque.strip().split('\n')[0].lower()
+                # Si no tiene título (ej. el primer bloque si no empieza con #), o si coincide con palabras clave
+                if not titulo_lower.startswith('#') or any(kw in titulo_lower for kw in keywords_importantes):
+                    secciones_relevantes.append(bloque.strip())
+            
+            if len(secciones_relevantes) > 0:
+                full_proposal_text = "\n\n".join(secciones_relevantes)
+            # -------------------------------------------------------------
+
             # Limpiar HTML residual pero preservar saltos de línea y encabezados
             clean_proposal = re.sub(r'<[^>]+>', '', full_proposal_text)
             clean_proposal = re.sub(r'[ \t]{2,}', ' ', clean_proposal)
             clean_proposal = re.sub(r'\n{3,}', '\n\n', clean_proposal).strip()
             proposal_text = clean_proposal[:8500] if len(clean_proposal) > 8500 else clean_proposal
-            logger.info(f"[_run_analysis_background] proposal_text: {len(proposal_text)} chars, {proposal_text.count(chr(10))} saltos de línea")
+            logger.info(f"[_run_analysis_background] proposal_text tras Extracción Selectiva: {len(proposal_text)} chars, {proposal_text.count(chr(10))} saltos de línea")
 
             max_sim_pct = quick_analysis.get("collision_risk_pct", 0.0)
             top_project_name = similar_projects[0]["title"] if similar_projects else "Ninguno"
