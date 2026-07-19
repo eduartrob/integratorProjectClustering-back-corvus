@@ -1,4 +1,4 @@
-import asyncio
+aimport asyncio
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks, Form
 from pydantic import BaseModel
 from typing import List
@@ -19,6 +19,83 @@ from app.services.llm_client import llm_client as ollama_service
 from app.services.inference_log_service import log_inference, get_history
 
 router = APIRouter()
+
+# ── Utilidad: Extraer contexto de solapamiento entre dos textos ──────────────
+def _extract_overlap_context(propuesta_text: str, similar_text: str, max_chars: int = 400) -> str:
+    """
+    Encuentra fragmentos donde la propuesta y el texto similar comparten
+    términos clave (TF-IDF), y extrae un extracto contextual con ~max_chars
+    alrededor del punto de mayor similitud.
+    """
+    import re
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    
+    if not propuesta_text or not similar_text:
+        return similar_text[:max_chars] if similar_text else ""
+    
+    try:
+        # Stopwords mínimas en español
+        stopwords = [
+            "el", "la", "los", "las", "un", "una", "unos", "unas", "y", "o", "pero", "si",
+            "por", "para", "como", "a", "ante", "bajo", "con", "contra", "de", "desde",
+            "en", "entre", "que", "del", "al", "se", "su", "sus", "es", "son", "no",
+            "lo", "le", "les", "me", "te", "nos", "muy", "mas", "más", "ya", "este",
+            "esta", "ser", "estar", "proyecto", "sistema", "desarrollo", "desarrollar",
+            "implementar", "implementación", "objetivo", "general", "específico"
+        ]
+        
+        vectorizer = TfidfVectorizer(stop_words=stopwords, max_features=100)
+        tfidf_matrix = vectorizer.fit_transform([propuesta_text, similar_text])
+        feature_names = vectorizer.get_feature_names_out()
+        
+        # Encontrar términos compartidos con mayor peso
+        vec_prop = tfidf_matrix[0].toarray()[0]
+        vec_sim = tfidf_matrix[1].toarray()[0]
+        shared_mask = (vec_prop > 0) & (vec_sim > 0)
+        shared_terms = [(feature_names[i], vec_prop[i] + vec_sim[i]) 
+                        for i in range(len(feature_names)) if shared_mask[i]]
+        shared_terms.sort(key=lambda x: x[1], reverse=True)
+        
+        if not shared_terms:
+            return similar_text[:max_chars]
+        
+        # Tomar el término más relevante y buscar su posición en el texto similar
+        top_term = shared_terms[0][0]
+        term_pos = similar_text.lower().find(top_term.lower())
+        
+        if term_pos == -1:
+            # Intentar con el segundo término
+            if len(shared_terms) > 1:
+                top_term = shared_terms[1][0]
+                term_pos = similar_text.lower().find(top_term.lower())
+            if term_pos == -1:
+                return similar_text[:max_chars]
+        
+        # Extraer contexto: ~max_chars/2 antes y ~max_chars/2 después
+        half = max_chars // 2
+        start = max(0, term_pos - half)
+        end = min(len(similar_text), term_pos + half)
+        
+        # Ajustar para no cortar palabras a la mitad
+        if start > 0:
+            # Buscar el inicio de palabra más cercano
+            space_before = similar_text.rfind(' ', 0, start)
+            if space_before > 0 and (start - space_before) < 30:
+                start = space_before + 1
+        if end < len(similar_text):
+            space_after = similar_text.find(' ', end)
+            if space_after > 0 and (space_after - end) < 30:
+                end = space_after
+        
+        context = similar_text[start:end].strip()
+        
+        # Agregar indicadores de contexto
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(similar_text) else ""
+        
+        return f"{prefix}{context}{suffix}"
+    except Exception:
+        return similar_text[:max_chars]
 
 progress_store = {}
 analysis_progress_store = {}
@@ -507,15 +584,24 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
                                 grouped_projects[p_id]["min_distance"] = dist
 
                     sorted_projects = sorted(grouped_projects.items(), key=lambda x: x[1]["min_distance"])[:3]
+                    
+                    # Construir texto completo de la propuesta para extraer overlapping context
+                    propuesta_completa = " ".join([c for c in chunks if c])
+                    
                     for p_id, p_data in sorted_projects:
                         dist = p_data["min_distance"]
                         sim_factor = 1.0 - (dist / 0.4)
                         similitud_pct = max(0, min(100, sim_factor * 100))
                         if similitud_pct > max_similitud_pct:
                             max_similitud_pct = similitud_pct
+                        
+                        # Extraer overlapping context: fragmentos donde la propuesta y el similar se solapan
+                        similar_full_text = " ".join(p_data["chunks"])
+                        overlap_context = _extract_overlap_context(propuesta_completa, similar_full_text, max_chars=400)
+                        
                         similar_projects.append({
                             "title": p_id.upper(),
-                            "content": " ".join(p_data["chunks"][:3]),
+                            "content": overlap_context if overlap_context else similar_full_text[:400],
                             "similarity_pct": similitud_pct
                         })
 
@@ -690,7 +776,18 @@ async def _run_analysis_background(user_id: str, draft_path: str):
                 "message": "En cola de espera: Hay otro análisis de IA en curso. Tu turno comenzará en un momento..."
             }
 
-        async with analysis_lock:
+        try:
+            # Timeout de 5 minutos para adquirir el lock (evita bloqueo permanente)
+            await asyncio.wait_for(analysis_lock.acquire(), timeout=300)
+        except asyncio.TimeoutError:
+            logger.error(f"[_run_analysis_background] Timeout esperando el lock de análisis para {user_id}")
+            analysis_progress_store[user_id] = {
+                "phase": -1,
+                "message": "El servicio de análisis está saturado. Intenta de nuevo en unos minutos."
+            }
+            return
+
+        try:
             analysis_progress_store[user_id] = {"phase": 5, "message": "Calculando riesgo de colisión..."}
 
             with open(draft_path, "r", encoding="utf-8") as f:
@@ -708,10 +805,14 @@ async def _run_analysis_background(user_id: str, draft_path: str):
             quick_analysis = draft_data.get("quick_analysis", {})
             project_id = draft_data.get("project_id")
 
-            full_proposal_text = " ".join(chunks)
-            clean_proposal = re.sub(r'<[^>]+>|[\*\|-]', ' ', full_proposal_text)
-            clean_proposal = re.sub(r'\s+', ' ', clean_proposal).strip()
-            proposal_text = clean_proposal[:8000] if len(clean_proposal) > 8000 else clean_proposal
+            # Preservar estructura de secciones Markdown (los chunks ya vienen separados por # Sección)
+            full_proposal_text = "\n\n".join(chunks)
+            # Limpiar HTML residual pero preservar saltos de línea y encabezados
+            clean_proposal = re.sub(r'<[^>]+>', '', full_proposal_text)
+            clean_proposal = re.sub(r'[ \t]{2,}', ' ', clean_proposal)
+            clean_proposal = re.sub(r'\n{3,}', '\n\n', clean_proposal).strip()
+            proposal_text = clean_proposal[:12000] if len(clean_proposal) > 12000 else clean_proposal
+            logger.info(f"[_run_analysis_background] proposal_text: {len(proposal_text)} chars, {proposal_text.count(chr(10))} saltos de línea")
 
             max_sim_pct = quick_analysis.get("collision_risk_pct", 0.0)
             top_project_name = similar_projects[0]["title"] if similar_projects else "Ninguno"
@@ -754,6 +855,9 @@ async def _run_analysis_background(user_id: str, draft_path: str):
             }
             analysis_result_store[user_id] = final_result
             analysis_progress_store[user_id] = {"phase": 9, "message": "Análisis completado. Recuperando resultado...", "uploaded_by": draft_data.get("uploaded_by")}
+
+        finally:
+            analysis_lock.release()
 
     except asyncio.CancelledError:
         print(f"BACKGROUND TASK: Análisis para {user_id} cancelado explícitamente.")
