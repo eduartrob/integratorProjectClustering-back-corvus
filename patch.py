@@ -1,19 +1,38 @@
 import re
 
-with open("app/services/llm_client.py", "r") as f:
+with open("app/api/routes.py", "r") as f:
     content = f.read()
 
-# Modify the signature of analyze_originality
-content = content.replace(
-    'async def analyze_originality(self, proposal_text: str, similar_projects: list,\n                             max_sim_pct: float = 0.0, risk_level: str = "Bajo",\n                             project_name: str = "NUEVA_PROPUESTA", top_project_name: str = "Ninguno") -> dict:',
-    'async def analyze_originality(self, proposal_text: str, similar_projects: list,\n                             max_sim_pct: float = 0.0, risk_level: str = "Bajo",\n                             project_name: str = "NUEVA_PROPUESTA", top_project_name: str = "Ninguno", project_id: str = None) -> dict:'
-)
+# We will wrap the inside of _run_analysis_background with a try-except and print traceback to sys.stderr
+target = """async def _run_analysis_background(user_id: str, draft_path: str):
 
-# Modify how config is retrieved
-content = content.replace(
-    'current_config = config_manager.get_config()\n            llm_provider = current_config.get("llm_provider", "ollama")',
-    'current_config = config_manager.get_config(project_id)\n            llm_provider = current_config.get("llm_provider", "ollama")'
-)
+    try:
+        active_analysis_tasks[user_id] = asyncio.current_task()"""
 
-with open("app/services/llm_client.py", "w") as f:
+replacement = """async def _run_analysis_background(user_id: str, draft_path: str):
+    import sys, traceback
+    try:
+
+    try:
+        active_analysis_tasks[user_id] = asyncio.current_task()"""
+
+content = content.replace(target, replacement)
+
+target2 = """            analysis_progress_store[user_id] = {
+                "phase": -1,
+                "message": f"Error interno en análisis: {str(e)}"
+            }"""
+
+replacement2 = """            analysis_progress_store[user_id] = {
+                "phase": -1,
+                "message": f"Error interno en análisis: {str(e)}"
+            }
+    except Exception as outer_e:
+        print(f"CRITICAL ERROR in _run_analysis_background: {outer_e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        analysis_progress_store[user_id] = {"phase": -1, "message": "CRITICAL ERROR"}"""
+
+content = content.replace(target2, replacement2)
+
+with open("app/api/routes.py", "w") as f:
     f.write(content)
