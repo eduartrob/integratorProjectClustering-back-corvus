@@ -697,7 +697,11 @@ async def _run_analysis_background(user_id: str, draft_path: str):
                 draft_data = json.load(f)
 
             chunks = draft_data.get("chunks", [])
+
             similar_projects = draft_data.get("similar_projects", [])
+            for p in similar_projects:
+                if "content" in p and p["content"]:
+                    p["content"] = p["content"][:1500] + "..." if len(p["content"]) > 1500 else p["content"]
             quick_analysis = draft_data.get("quick_analysis", {})
             project_id = draft_data.get("project_id")
 
