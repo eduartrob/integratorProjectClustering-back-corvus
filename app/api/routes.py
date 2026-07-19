@@ -768,143 +768,150 @@ async def get_analysis_status(user_id: str):
     return {"phase": 0, "message": ""}
 
 async def _run_analysis_background(user_id: str, draft_path: str):
-    
+    import traceback
+    import sys
     try:
-        active_analysis_tasks[user_id] = asyncio.current_task()
         
-        if analysis_lock.locked():
-            analysis_progress_store[user_id] = {
-                "phase": 5,
-                "message": "En cola de espera: Hay otro análisis de IA en curso. Tu turno comenzará en un momento..."
-            }
-
         try:
-            # Timeout de 5 minutos para adquirir el lock (evita bloqueo permanente)
-            await asyncio.wait_for(analysis_lock.acquire(), timeout=300)
-        except asyncio.TimeoutError:
-            logger.error(f"[_run_analysis_background] Timeout esperando el lock de análisis para {user_id}")
-            analysis_progress_store[user_id] = {
-                "phase": -1,
-                "message": "El servicio de análisis está saturado. Intenta de nuevo en unos minutos."
-            }
-            return
-
-        try:
-            analysis_progress_store[user_id] = {"phase": 5, "message": "Calculando riesgo de colisión..."}
-
-            with open(draft_path, "r", encoding="utf-8") as f:
-                draft_data = json.load(f)
-
-            chunks = draft_data.get("chunks", [])
-
-            import re
-            similar_projects = draft_data.get("similar_projects", [])
-            for p in similar_projects:
-                if "content" in p and p["content"]:
-                    clean_content = re.sub(r'<[^>]+>|[\*\|-]', ' ', p["content"])
-                    clean_content = re.sub(r'\s+', ' ', clean_content).strip()
-                    p["content"] = clean_content[:800] + "..." if len(clean_content) > 800 else clean_content
-            quick_analysis = draft_data.get("quick_analysis", {})
-            project_id = draft_data.get("project_id")
-
-            # Preservar estructura de secciones Markdown (los chunks ya vienen separados por # Sección)
-            full_proposal_text = "\n\n".join(chunks)
+            active_analysis_tasks[user_id] = asyncio.current_task()
             
-            # --- OPTIMIZACIÓN: Extracción Selectiva (Smart Extraction) Dinámica ---
-            # Dividimos por encabezados Markdown
-            bloques = re.split(r'\n(?=#+ )', full_proposal_text)
-            
-            # Obtener los nombres reales de las secciones que validó el profesor
-            secciones_encontradas = quick_analysis.get("secciones_encontradas", [])
-            # Convertimos a minúsculas y quitamos acentos para hacer matching flexible
-            import unicodedata
-            def normalize_kw(text):
-                return ''.join(c for c in unicodedata.normalize('NFD', text.lower()) if unicodedata.category(c) != 'Mn')
-            
-            keywords_dinamicos = [normalize_kw(sec) for sec in secciones_encontradas]
-            # Fallback por si la validación previa falló o está vacía
-            if not keywords_dinamicos:
-                keywords_dinamicos = ['problema', 'objetivo', 'justificaci', 'alcance', 'resumen', 'introducci']
-                
-            secciones_relevantes = []
-            
-            for bloque in bloques:
-                # Extraemos solo el título (primera línea del bloque)
-                titulo_crudo = bloque.strip().split('\n')[0]
-                titulo_norm = normalize_kw(titulo_crudo)
-                
-                # Si no tiene título (ej. el primer bloque si no empieza con #), o si el título normalizado contiene alguna de las palabras clave dinámicas
-                if not titulo_crudo.startswith('#') or any(kw in titulo_norm for kw in keywords_dinamicos):
-                    secciones_relevantes.append(bloque.strip())
-            
-            if len(secciones_relevantes) > 0:
-                full_proposal_text = "\n\n".join(secciones_relevantes)
-            # -------------------------------------------------------------
-
-            # Limpiar HTML residual pero preservar saltos de línea y encabezados
-            clean_proposal = re.sub(r'<[^>]+>', '', full_proposal_text)
-            clean_proposal = re.sub(r'[ \t]{2,}', ' ', clean_proposal)
-            clean_proposal = re.sub(r'\n{3,}', '\n\n', clean_proposal).strip()
-            proposal_text = clean_proposal[:8500] if len(clean_proposal) > 8500 else clean_proposal
-            logger.info(f"[_run_analysis_background] proposal_text tras Extracción Selectiva: {len(proposal_text)} chars, {proposal_text.count(chr(10))} saltos de línea")
-
-            max_sim_pct = quick_analysis.get("collision_risk_pct", 0.0)
-            top_project_name = similar_projects[0]["title"] if similar_projects else "Ninguno"
-            risk_level = "Alto" if max_sim_pct > 50 else ("Medio" if max_sim_pct > 20 else "Bajo")
-
-            if not await ollama_service.check_health():
-                analysis_result_store[user_id] = {
-                    "status": "warning",
-                    "message": "El motor de IA no está disponible en este momento.",
-                    "similar_projects": [p["title"] for p in similar_projects]
+            if analysis_lock.locked():
+                analysis_progress_store[user_id] = {
+                    "phase": 5,
+                    "message": "En cola de espera: Hay otro análisis de IA en curso. Tu turno comenzará en un momento..."
                 }
-                analysis_progress_store[user_id] = {"phase": -1, "message": "El motor de IA no está disponible."}
+
+            try:
+                # Timeout de 5 minutos para adquirir el lock (evita bloqueo permanente)
+                await asyncio.wait_for(analysis_lock.acquire(), timeout=300)
+            except asyncio.TimeoutError:
+                logger.error(f"[_run_analysis_background] Timeout esperando el lock de análisis para {user_id}")
+                analysis_progress_store[user_id] = {
+                    "phase": -1,
+                    "message": "El servicio de análisis está saturado. Intenta de nuevo en unos minutos."
+                }
                 return
 
-            analysis_progress_store[user_id] = {"phase": 6, "message": "El comité académico está redactando el dictamen..."}
+            try:
+                analysis_progress_store[user_id] = {"phase": 5, "message": "Calculando riesgo de colisión..."}
 
-            await asyncio.sleep(0)
-            llm_verdict = await ollama_service.analyze_originality(
-                proposal_text=proposal_text,
-                similar_projects=similar_projects,
-                max_sim_pct=round(max_sim_pct, 1),
-                risk_level=risk_level,
-                project_name="PROPUESTA_DEL_ALUMNO",
-                top_project_name=top_project_name,
-                project_id=project_id
-            )
+                with open(draft_path, "r", encoding="utf-8") as f:
+                    draft_data = json.load(f)
 
-            analysis_progress_store[user_id] = {"phase": 7, "message": "Generando recomendaciones técnicas..."}
+                chunks = draft_data.get("chunks", [])
 
-            analysis_progress_store[user_id] = {"phase": 7, "message": "Generando recomendaciones técnicas..."}
+                import re
+                similar_projects = draft_data.get("similar_projects", [])
+                for p in similar_projects:
+                    if "content" in p and p["content"]:
+                        clean_content = re.sub(r'<[^>]+>|[\*\|-]', ' ', p["content"])
+                        clean_content = re.sub(r'\s+', ' ', clean_content).strip()
+                        p["content"] = clean_content[:800] + "..." if len(clean_content) > 800 else clean_content
+                quick_analysis = draft_data.get("quick_analysis", {})
+                project_id = draft_data.get("project_id")
 
-            analysis_progress_store[user_id] = {"phase": 8, "message": "Afinando veredicto final..."}
+                # Preservar estructura de secciones Markdown (los chunks ya vienen separados por # Sección)
+                full_proposal_text = "\n\n".join(chunks)
+                
+                # --- OPTIMIZACIÓN: Extracción Selectiva (Smart Extraction) Dinámica ---
+                # Dividimos por encabezados Markdown
+                bloques = re.split(r'\n(?=#+ )', full_proposal_text)
+                
+                # Obtener los nombres reales de las secciones que validó el profesor
+                secciones_encontradas = quick_analysis.get("secciones_encontradas", [])
+                # Convertimos a minúsculas y quitamos acentos para hacer matching flexible
+                import unicodedata
+                def normalize_kw(text):
+                    return ''.join(c for c in unicodedata.normalize('NFD', text.lower()) if unicodedata.category(c) != 'Mn')
+                
+                keywords_dinamicos = [normalize_kw(sec) for sec in secciones_encontradas]
+                # Fallback por si la validación previa falló o está vacía
+                if not keywords_dinamicos:
+                    keywords_dinamicos = ['problema', 'objetivo', 'justificaci', 'alcance', 'resumen', 'introducci']
+                    
+                secciones_relevantes = []
+                
+                for bloque in bloques:
+                    # Extraemos solo el título (primera línea del bloque)
+                    titulo_crudo = bloque.strip().split('\n')[0]
+                    titulo_norm = normalize_kw(titulo_crudo)
+                    
+                    # Si no tiene título (ej. el primer bloque si no empieza con #), o si el título normalizado contiene alguna de las palabras clave dinámicas
+                    if not titulo_crudo.startswith('#') or any(kw in titulo_norm for kw in keywords_dinamicos):
+                        secciones_relevantes.append(bloque.strip())
+                
+                if len(secciones_relevantes) > 0:
+                    full_proposal_text = "\n\n".join(secciones_relevantes)
+                # -------------------------------------------------------------
 
-            final_result = {
-                "status": "success",
-                "message": "Análisis completado con Llama 3.2 3B",
-                "similar_projects_found": len(similar_projects),
-                "ollama_analysis": llm_verdict,
-                "uploaded_by": draft_data.get("uploaded_by")
-            }
-            analysis_result_store[user_id] = final_result
-            analysis_progress_store[user_id] = {"phase": 9, "message": "Análisis completado. Recuperando resultado...", "uploaded_by": draft_data.get("uploaded_by")}
+                # Limpiar HTML residual pero preservar saltos de línea y encabezados
+                clean_proposal = re.sub(r'<[^>]+>', '', full_proposal_text)
+                clean_proposal = re.sub(r'[ \t]{2,}', ' ', clean_proposal)
+                clean_proposal = re.sub(r'\n{3,}', '\n\n', clean_proposal).strip()
+                proposal_text = clean_proposal[:8500] if len(clean_proposal) > 8500 else clean_proposal
+                logger.info(f"[_run_analysis_background] proposal_text tras Extracción Selectiva: {len(proposal_text)} chars, {proposal_text.count(chr(10))} saltos de línea")
 
+                max_sim_pct = quick_analysis.get("collision_risk_pct", 0.0)
+                top_project_name = similar_projects[0]["title"] if similar_projects else "Ninguno"
+                risk_level = "Alto" if max_sim_pct > 50 else ("Medio" if max_sim_pct > 20 else "Bajo")
+
+                if not await ollama_service.check_health():
+                    analysis_result_store[user_id] = {
+                        "status": "warning",
+                        "message": "El motor de IA no está disponible en este momento.",
+                        "similar_projects": [p["title"] for p in similar_projects]
+                    }
+                    analysis_progress_store[user_id] = {"phase": -1, "message": "El motor de IA no está disponible."}
+                    return
+
+                analysis_progress_store[user_id] = {"phase": 6, "message": "El comité académico está redactando el dictamen..."}
+
+                await asyncio.sleep(0)
+                llm_verdict = await ollama_service.analyze_originality(
+                    proposal_text=proposal_text,
+                    similar_projects=similar_projects,
+                    max_sim_pct=round(max_sim_pct, 1),
+                    risk_level=risk_level,
+                    project_name="PROPUESTA_DEL_ALUMNO",
+                    top_project_name=top_project_name,
+                    project_id=project_id
+                )
+
+                analysis_progress_store[user_id] = {"phase": 7, "message": "Generando recomendaciones técnicas..."}
+
+                analysis_progress_store[user_id] = {"phase": 7, "message": "Generando recomendaciones técnicas..."}
+
+                analysis_progress_store[user_id] = {"phase": 8, "message": "Afinando veredicto final..."}
+
+                final_result = {
+                    "status": "success",
+                    "message": "Análisis completado con Llama 3.2 3B",
+                    "similar_projects_found": len(similar_projects),
+                    "ollama_analysis": llm_verdict,
+                    "uploaded_by": draft_data.get("uploaded_by")
+                }
+                analysis_result_store[user_id] = final_result
+                analysis_progress_store[user_id] = {"phase": 9, "message": "Análisis completado. Recuperando resultado...", "uploaded_by": draft_data.get("uploaded_by")}
+
+            finally:
+                analysis_lock.release()
+
+        except asyncio.CancelledError:
+            print(f"BACKGROUND TASK: Análisis para {user_id} cancelado explícitamente.")
+            analysis_progress_store.pop(user_id, None)
+            analysis_result_store.pop(user_id, None)
+            raise
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            analysis_progress_store[user_id] = {"phase": -1, "message": f"Error en el análisis: {str(e)}"}
         finally:
-            analysis_lock.release()
+            active_analysis_tasks.pop(user_id, None)
 
-    except asyncio.CancelledError:
-        print(f"BACKGROUND TASK: Análisis para {user_id} cancelado explícitamente.")
-        analysis_progress_store.pop(user_id, None)
-        analysis_result_store.pop(user_id, None)
-        raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        analysis_progress_store[user_id] = {"phase": -1, "message": f"Error en el análisis: {str(e)}"}
-    finally:
-        active_analysis_tasks.pop(user_id, None)
-
+        print(f'CRITICAL ERROR IN _run_analysis_background: {e}', file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        analysis_progress_store[user_id] = {'phase': -1, 'message': f'Fallo critico: {e}'}
 @router.post("/analyze-draft-proposal")
 async def analyze_draft_proposal(user_id: str = Form(...)):
     
