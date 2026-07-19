@@ -89,7 +89,7 @@ class LlmClient:
             # Let's create an endpoint in llm-service if it doesn't exist, OR check if we have a direct ollama client.
             logger.info(f"[LlmClient] Generando nombre de cluster con {llm_provider}")
             
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     f"{settings.LLM_SERVICE_URL}/api/v1/llm/generate-name",
                     json={"prompt": prompt, "provider": llm_provider}

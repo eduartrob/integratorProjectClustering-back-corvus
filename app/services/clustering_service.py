@@ -320,9 +320,9 @@ class ClusteringEngineService:
                     # Centroide nuevo en espacio original 384d
                     centroide_384d = np.mean(X[puntos_cluster_idx], axis=0)
                     
-                    # Intentar reutilizar nombre existente por similitud coseno (≥ 0.88)
+                    # Intentar reutilizar nombre existente por similitud coseno (≥ 0.96)
                     nombre_reutilizado = self._match_existing_name(
-                        centroide_384d, existing_named_clusters, threshold=0.88
+                        centroide_384d, existing_named_clusters, threshold=0.96
                     )
                     
                     if nombre_reutilizado:
@@ -380,17 +380,18 @@ class ClusteringEngineService:
         por su cluster_name previo almacenado en projects_data (antes del re-clustering).
         Solo incluye nombres que no sean genéricos ('Clúster N', 'Proyectos Iniciales').
         """
-        name_to_embeddings: dict = {}
-        for idx, p_id in enumerate(unique_ids):
-            name = projects_data[p_id].get('prev_cluster_name', '').strip()
-            if not name or name.startswith('Clúster ') or name == 'Proyectos Iniciales':
+        cluster_groups = {}
+        for p_idx, p_id in enumerate(unique_ids):
+            prev_name = projects_data[p_id].get('prev_cluster_name', '').strip()
+            # Filtra nombres genéricos
+            if not prev_name or prev_name.startswith("Clúster ") or prev_name in ["Tema Tecnológico", "Océano Azul", "Proyectos Iniciales"]:
                 continue
-            if name not in name_to_embeddings:
-                name_to_embeddings[name] = []
-            name_to_embeddings[name].append(X[idx])
+            if prev_name not in cluster_groups:
+                cluster_groups[prev_name] = []
+            cluster_groups[prev_name].append(X[p_idx])
 
         result = []
-        for name, embs in name_to_embeddings.items():
+        for name, embs in cluster_groups.items():
             if embs:
                 centroide = np.mean(embs, axis=0)
                 result.append((centroide, name))
