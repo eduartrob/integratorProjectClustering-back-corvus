@@ -227,7 +227,8 @@ async def process_folder(request: ProcessFolderRequest, background_tasks: Backgr
         if response.status_code == 200:
             data = response.json()
             if data.get("exists") is True:
-                return {"message": "La carpeta ya se encuentra sincronizada.", "sync_skipped": True}
+                print(f"Carpeta {request.folder_id} ya existe en Auth, pero se forzará re-escaneo para recuperar Qdrant.")
+                # return {"message": "La carpeta ya se encuentra sincronizada.", "sync_skipped": True}
                 
     except Exception as e:
         print(f"Error verificando carpeta con Auth Service: {e}")
@@ -535,24 +536,24 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
                 exclusion_rules_norm = [normalize_name(r) for r in exclusion_rules]
                 
                 if assigned_norm in exclusion_rules_norm:
-                    raise Exception(f"[Filtro 2A] Tu propuesta fue clasificada semánticamente en el tema '{assigned_cluster_name}', el cual ha sido bloqueado por los profesores.")
+                    raise Exception(f"Tu propuesta fue clasificada semánticamente en el tema '{assigned_cluster_name}', el cual ha sido bloqueado por los profesores.")
 
             analysis_progress_store[target_id] = {"phase": 3, "message": "Validando secciones obligatorias...", "uploaded_by": uploaded_by}
             resultado_blacklist = nlp_service.validar_blacklist_extendida(full_text)
             if not resultado_blacklist["ok"]:
-                raise Exception(f"[Filtro 2A] El documento contiene contenido no permitido ('{resultado_blacklist['palabra_bloqueada']}'). Sube tu propuesta de proyecto, no un CV o manual.")
+                raise Exception(f"El documento contiene contenido no permitido ('{resultado_blacklist['palabra_bloqueada']}'). Sube tu propuesta de proyecto, no un CV o manual.")
 
-            resultado_secciones = nlp_service.validar_secciones_profesor(full_text)
+            resultado_secciones = nlp_service.validar_secciones_profesor(full_text, project_id=project_id)
             completitud_pct = resultado_secciones["completitud_pct"]
             if not resultado_secciones["ok"]:
                 faltantes_str = ", ".join(f"'{s}'" for s in resultado_secciones["faltantes"])
-                raise Exception(f"[Filtro 2B] Tu propuesta está incompleta. Falta información sobre: {faltantes_str}.")
+                raise Exception(f"Tu propuesta está incompleta. Falta información sobre: {faltantes_str}.")
 
             resultado_coherencia = nlp_service.validar_coherencia_semantica(full_text)
             coherencia_pct = resultado_coherencia["coherencia_pct"]
             if not resultado_coherencia["ok"]:
                 pares_str = "; ".join(p["par"] for p in resultado_coherencia["pares_invalidos"])
-                raise Exception(f"[Filtro 3] Las secciones de tu propuesta no son coherentes entre sí ({pares_str}). Asegúrate de que el Problema, el Objetivo y la Justificación hablen del mismo proyecto.")
+                raise Exception(f"Las secciones de tu propuesta no son coherentes entre sí ({pares_str}). Asegúrate de que el Problema, el Objetivo y la Justificación hablen del mismo proyecto.")
 
             analysis_progress_store[target_id] = {"phase": 4, "message": "Buscando colisiones en Qdrant...", "uploaded_by": uploaded_by}
             safe_text = nlp_service.anonymize_pii(texto_limpio)
@@ -597,21 +598,22 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
                         if similitud_pct > max_similitud_pct:
                             max_similitud_pct = similitud_pct
                         
-                        # Extraer overlapping context: fragmentos donde la propuesta y el similar se solapan
-                        similar_full_text = " ".join(p_data["chunks"])
-                        overlap_context = _extract_overlap_context(propuesta_completa, similar_full_text, max_chars=400)
-                        
-                        similar_projects.append({
-                            "title": p_id.upper(),
-                            "content": overlap_context if overlap_context else similar_full_text[:400],
-                            "similarity_pct": similitud_pct
-                        })
+                        if similitud_pct > 0:
+                            # Extraer overlapping context: fragmentos donde la propuesta y el similar se solapan
+                            similar_full_text = " ".join(p_data["chunks"])
+                            overlap_context = _extract_overlap_context(propuesta_completa, similar_full_text, max_chars=400)
+                            
+                            similar_projects.append({
+                                "title": p_id.upper(),
+                                "content": overlap_context if overlap_context else similar_full_text[:400],
+                                "similarity_pct": similitud_pct
+                            })
 
             # --- BLOQUEO INMEDIATO: Propuesta ya registrada (duplicado) ---
             DUPLICATE_THRESHOLD = 85.0
             if max_similitud_pct >= DUPLICATE_THRESHOLD:
                 raise Exception(
-                    f"[Filtro Antiplagio] Tu propuesta es un duplicado de un proyecto ya registrado "
+                    f"Tu propuesta es un duplicado de un proyecto ya registrado "
                     f"({max_similitud_pct:.1f}% de similitud). No está permitido subir una propuesta "
                     f"igual o casi idéntica a una ya enviada anteriormente."
                 )
@@ -729,7 +731,7 @@ async def pre_validate_background(target_id: str, user_id: str, file_bytes: byte
         import traceback
         full_trace = traceback.format_exc()
         logger.error(f"[pre_validate_background] ERROR COMPLETO:\n{full_trace}")
-        error_msg = f"{str(e)}\n\nTraceback:\n{full_trace}"
+        error_msg = str(e)
         analysis_progress_store[target_id] = {"phase": -1, "message": error_msg, "uploaded_by": uploaded_by}
     finally:
         active_analysis_tasks.pop(target_id, None)

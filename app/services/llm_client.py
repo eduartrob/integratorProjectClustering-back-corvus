@@ -78,7 +78,7 @@ class LlmClient:
     async def generate_cluster_name(self, sample_texts: list) -> str:
         try:
             from app.core.config_manager import config_manager
-            current_config = config_manager.get_config(project_id)
+            current_config = config_manager.get_config(None)
             llm_provider = current_config.get("llm_provider", "ollama")
             groq_model = current_config.get("groq_model", "llama-3.3-70b-versatile")
 
