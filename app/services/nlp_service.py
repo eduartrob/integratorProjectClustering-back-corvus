@@ -76,7 +76,7 @@ class NLPService:
         return {"ok": True, "palabra_bloqueada": None}
 
     # ── FILTRO 2B: Secciones del profesor ─────────────────────────────────
-    def validar_secciones_profesor(self, texto_crudo: str) -> dict:
+    def validar_secciones_profesor(self, texto_crudo: str, project_id: str = None) -> dict:
         """
         Verifica que el documento tenga las secciones que los profesores definen.
         Retorna: {ok, faltantes, encontradas, completitud_pct}
@@ -89,7 +89,7 @@ class NLPService:
         t = re.sub(r'[ \t]+', ' ', t)
         faltantes, encontradas = [], []
         
-        project_sections = config_manager.get_project_sections()
+        project_sections = config_manager.get_project_sections(project_id)
         
         if not project_sections:
             return {

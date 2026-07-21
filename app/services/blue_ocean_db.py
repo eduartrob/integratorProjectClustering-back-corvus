@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from typing import Dict, Any, List
 
-DB_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'blue_ocean_state.json')
+DB_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'blue_ocean_state.json')
 
 class BlueOceanDB:
     def __init__(self):
