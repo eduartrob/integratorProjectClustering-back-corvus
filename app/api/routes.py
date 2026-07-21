@@ -1132,8 +1132,9 @@ async def validate_idea_endpoint(req: ValidateIdeaRequest):
                     metas = search_results["metadatas"][q_idx]
                     for doc, meta in zip(docs, metas):
                         p_id = meta.get("project_id", "Desconocido")
+                        clean_title = p_id.replace('proyecto_', '').replace('.md', '').replace('.pdf', '').replace('_', ' ').title() if p_id != "Desconocido" else "Desconocido"
                         similar_projects.append({
-                            "title": f"Proyecto {p_id}",
+                            "title": clean_title,
                             "description": doc[:200]
                         })
     except Exception as e:
