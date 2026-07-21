@@ -360,16 +360,8 @@ async def get_blue_ocean_niches(page: int = 1, limit: int = 10):
     except Exception as e:
 
         print(f"Error extrayendo los océanos azules desde ChromaDB: {e}")
-    if not niches and page == 1:
-        niches = [
-            {
-                "category": "MÉTRICA VACÍA",
-
-                "tag": "Requiere Ejecución",
-                "title": "Aún no hay Océanos Azules",
-                "description": "El algoritmo de clustering global aún no ha detectado proyectos con suficiente originalidad semántica o se requiere ejecutar un análisis con un mayor volumen de documentos."
-            }
-        ]
+    # If no niches are found, we simply return the empty list
+    # The frontend will handle displaying an appropriate empty state.
 
     return {
         "title": "Océanos Azules (Proyectos Reales)",
