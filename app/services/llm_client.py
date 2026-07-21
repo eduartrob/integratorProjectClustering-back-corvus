@@ -83,13 +83,14 @@ class LlmClient:
             groq_model = current_config.get("groq_model", "llama-3.3-70b-versatile")
 
             prompt = (
-                "Analiza estos fragmentos de proyectos académicos de ingeniería "
-                "y devuelve ÚNICAMENTE de 2 a 4 palabras en español que describan su área temática ESPECÍFICA "
-                "(ej. 'Visión Computacional Aplicada', 'Gestión Hospitalaria'). Sé lo más específico posible. "
-                "NO devuelvas ninguna otra palabra, ni viñetas, ni prefijos.\n\n"
+                "Analiza estos fragmentos de proyectos académicos y determina su ÁREA DE NEGOCIO, SECTOR O DOMINIO DE APLICACIÓN. "
+                "No uses disciplinas académicas o tecnologías genéricas. "
+                "EJEMPLOS DE LO QUE BUSCO: 'Gestión de Gimnasios', 'Comunidad y Reportes', 'Agenda Médica', 'E-Commerce Artesanal', 'Gestión de Restaurantes', 'Veterinarias', 'Control Académico'. "
+                "PROHIBIDO USAR: 'Desarrollo de Software', 'Inteligencia Artificial', 'Ingeniería', 'Sistemas', 'Tecnología', 'Aplicación Móvil'. "
+                "Devuelve ÚNICAMENTE de 2 a 4 palabras precisas. NO devuelvas ninguna otra palabra, ni viñetas, ni prefijos.\n\n"
             )
             if existing_names:
-                prompt += f"IMPORTANTE: Ya existen grupos llamados {existing_names}. DEBES evitar usar nombres idénticos o muy similares. Busca el diferenciador específico.\n\n"
+                prompt += f"IMPORTANTE: Ya existen grupos llamados {existing_names}. DEBES evitar usar nombres idénticos o muy similares. Busca el diferenciador específico de negocio.\n\n"
             
             for i, text in enumerate(sample_texts):
                 prompt += f"Fragmento {i+1}: {text[:300]}...\n\n"
