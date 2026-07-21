@@ -194,6 +194,30 @@ class QdrantService:
         payloads = [p.payload for p in points]
         return vectors, payloads
 
+    def get_project_payloads(self, project_id: str) -> list:
+        """Obtiene todos los payloads (chunks) de un proyecto específico."""
+        from qdrant_client.http.models import FilterSelector, Filter, FieldCondition, MatchValue
+        points, offset = [], None
+        while True:
+            batch, next_offset = self.client.scroll(
+                collection_name=_COLLECTION_NAME,
+                scroll_filter=Filter(
+                    must=[FieldCondition(
+                        key="project_id",
+                        match=MatchValue(value=project_id)
+                    )]
+                ),
+                limit=256,
+                offset=offset,
+                with_vectors=False,
+                with_payload=True,
+            )
+            points.extend(batch)
+            if next_offset is None:
+                break
+            offset = next_offset
+        return [p.payload for p in points]
+
     def delete_by_project_id(self, project_id: str) -> bool:
         """Elimina todos los vectores de un proyecto por su ID."""
         self.client.delete(

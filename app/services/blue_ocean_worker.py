@@ -57,19 +57,20 @@ class BlueOceanWorker:
                     # Extraer el texto real de Qdrant para este proyecto
                     description = "Nicho inexplorado detectado por baja colisión semántica."
                     try:
-                        _, payloads = qdrant_service.get_all_embeddings()
+                        payloads = qdrant_service.get_project_payloads(niche_id)
                         project_texts = []
                         if payloads:
                             for meta in payloads:
-                                if meta and meta.get('project_id') == niche_id:
-                                    text_chunk = meta.get('text', '')
-                                    if text_chunk:
-                                        project_texts.append(text_chunk)
+                                text_chunk = meta.get('text', '')
+                                if text_chunk:
+                                    project_texts.append(text_chunk)
                         
                         if project_texts:
                             full_text = "\n".join(project_texts)
                             # Limitar a ~3000 palabras (aprox 15000-20000 caracteres)
                             description = full_text[:15000]
+                        else:
+                            logger.warning(f"Worker: No se encontró texto para {niche_id} en Qdrant.")
                     except Exception as e:
                         logger.error(f"Worker: Error extrayendo texto para {niche_id}: {e}")
 
