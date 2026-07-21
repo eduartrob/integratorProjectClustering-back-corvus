@@ -337,7 +337,18 @@ class ClusteringEngineService:
                     top_3_globales = [puntos_cluster_idx[idx] for idx in top_3_locales]
                     
                     textos_cercanos = [projects_data[unique_ids[idx]]['text'] for idx in top_3_globales]
-                    nombre_generado = await llm_client.generate_cluster_name(textos_cercanos)
+                    
+                    # Pasar los nombres ya usados al LLM para que intente ser diferente
+                    used_names = list(nombres_clusters.values())
+                    nombre_generado = await llm_client.generate_cluster_name(textos_cercanos, used_names)
+                    
+                    # Deduplicación estricta local por si el LLM falla en ser original
+                    base_name = nombre_generado
+                    counter = 2
+                    while nombre_generado in nombres_clusters.values():
+                        nombre_generado = f"{base_name} {counter}"
+                        counter += 1
+                        
                     nombres_clusters[i] = nombre_generado
                     logger.info(f"[Clustering] Clúster {i} ({career}) → nuevo nombre LLM: '{nombre_generado}'")
 

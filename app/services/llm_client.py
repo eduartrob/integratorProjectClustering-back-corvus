@@ -75,7 +75,7 @@ class LlmClient:
                 "verdict": "Error de conexión con el servicio de IA",
             }
 
-    async def generate_cluster_name(self, sample_texts: list) -> str:
+    async def generate_cluster_name(self, sample_texts: list, existing_names: list = None) -> str:
         try:
             from app.core.config_manager import config_manager
             current_config = config_manager.get_config(None)
@@ -83,10 +83,14 @@ class LlmClient:
             groq_model = current_config.get("groq_model", "llama-3.3-70b-versatile")
 
             prompt = (
-                "Analiza estos fragmentos de proyectos académicos de ingeniería de software "
-                "y devuelve ÚNICAMENTE 2 palabras en español que describan su área temática principal. "
+                "Analiza estos fragmentos de proyectos académicos de ingeniería "
+                "y devuelve ÚNICAMENTE de 2 a 4 palabras en español que describan su área temática ESPECÍFICA "
+                "(ej. 'Visión Computacional Aplicada', 'Gestión Hospitalaria'). Sé lo más específico posible. "
                 "NO devuelvas ninguna otra palabra, ni viñetas, ni prefijos.\n\n"
             )
+            if existing_names:
+                prompt += f"IMPORTANTE: Ya existen grupos llamados {existing_names}. DEBES evitar usar nombres idénticos o muy similares. Busca el diferenciador específico.\n\n"
+            
             for i, text in enumerate(sample_texts):
                 prompt += f"Fragmento {i+1}: {text[:300]}...\n\n"
 
