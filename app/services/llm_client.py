@@ -21,15 +21,16 @@ class LlmClient:
 
     async def analyze_originality(self, proposal_text: str, similar_projects: list,
                              max_sim_pct: float = 0.0, risk_level: str = "Bajo",
-                             project_name: str = "NUEVA_PROPUESTA", top_project_name: str = "Ninguno") -> dict:
+                             project_name: str = "NUEVA_PROPUESTA", top_project_name: str = "Ninguno", project_id: str = None) -> dict:
         try:
             from app.core.config_manager import config_manager
-            current_config = config_manager.get_config()
+            current_config = config_manager.get_config(project_id)
             llm_provider = current_config.get("llm_provider", "ollama")
+            groq_model = current_config.get("groq_model", "llama-3.3-70b-versatile")
 
             logger.info(f"[LlmClient] Enviando propuesta a {settings.LLM_SERVICE_URL}/api/v1/llm/analyze-proposal (Provider: {llm_provider})")
             
-            async with httpx.AsyncClient(timeout=None) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
                 response = await client.post(
                     f"{settings.LLM_SERVICE_URL}/api/v1/llm/analyze-proposal",
                     json={
@@ -40,6 +41,7 @@ class LlmClient:
                         "project_name": project_name,
                         "top_project_name": top_project_name,
                         "provider": llm_provider,
+                        "groq_model": groq_model,
                     },
                 )
 
@@ -51,7 +53,12 @@ class LlmClient:
                     }
 
                 response.raise_for_status()
-                return response.json()
+                data = response.json()
+                
+                if data.get("actual_model_used") and data["actual_model_used"] != groq_model:
+                    logger.info(f"Fallback model used: {data['actual_model_used']}")
+
+                return data
 
         except httpx.TimeoutException:
             logger.error("[LlmClient] Timeout al conectar con llm-service")
@@ -68,35 +75,47 @@ class LlmClient:
                 "verdict": "Error de conexión con el servicio de IA",
             }
 
-    async def generate_cluster_name(self, sample_texts: list) -> str:
+    async def generate_cluster_name(self, sample_texts: list, existing_names: list = None) -> str:
         try:
             from app.core.config_manager import config_manager
-            current_config = config_manager.get_config()
+            current_config = config_manager.get_config(None)
             llm_provider = current_config.get("llm_provider", "ollama")
+            groq_model = current_config.get("groq_model", "llama-3.3-70b-versatile")
 
             prompt = (
-                "Analiza estos fragmentos de proyectos académicos de ingeniería de software "
-                "y devuelve ÚNICAMENTE 2 palabras en español que describan su área temática principal.\n\n"
+                "Analiza estos fragmentos de proyectos académicos y determina su ÁREA DE NEGOCIO, SECTOR O DOMINIO DE APLICACIÓN. "
+                "No uses disciplinas académicas o tecnologías genéricas. "
+                "EJEMPLOS DE LO QUE BUSCO: 'Gestión de Gimnasios', 'Comunidad y Reportes', 'Agenda Médica', 'E-Commerce Artesanal', 'Gestión de Restaurantes', 'Veterinarias', 'Control Académico'. "
+                "PROHIBIDO USAR: 'Desarrollo de Software', 'Inteligencia Artificial', 'Ingeniería', 'Sistemas', 'Tecnología', 'Aplicación Móvil'. "
+                "Devuelve ÚNICAMENTE de 2 a 4 palabras precisas. NO devuelvas ninguna otra palabra, ni viñetas, ni prefijos.\n\n"
             )
+            if existing_names:
+                prompt += f"IMPORTANTE: Ya existen grupos llamados {existing_names}. DEBES evitar usar nombres idénticos o muy similares. Busca el diferenciador específico de negocio.\n\n"
+            
             for i, text in enumerate(sample_texts):
-                prompt += f"Proyecto {i+1}: {text[:300]}...\n\n"
+                prompt += f"Fragmento {i+1}: {text[:300]}...\n\n"
 
-
-            # Assuming llm-service has an endpoint for raw prompt/chat or we can use the provider directly
-            # Wait, the llm-service may only have analyze-proposal.
-            # I will check if there is a raw prompt endpoint. If not, I can just use ollama_service directly if local.
-            # But wait, we can just send it to analyze-proposal? No, that's a specific schema.
-            # Let's create an endpoint in llm-service if it doesn't exist, OR check if we have a direct ollama client.
             logger.info(f"[LlmClient] Generando nombre de cluster con {llm_provider}")
             
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
                 response = await client.post(
                     f"{settings.LLM_SERVICE_URL}/api/v1/llm/generate-name",
-                    json={"prompt": prompt, "provider": llm_provider}
+                    json={"prompt": prompt, "provider": llm_provider, "groq_model": groq_model}
                 )
                 if response.status_code == 200:
                     data = response.json()
-                    return data.get("name", "Tema Tecnológico").strip('"\' ')
+                    
+                    if data.get("actual_model_used") and data["actual_model_used"] != groq_model:
+                        logger.info(f"Fallback model used: {data['actual_model_used']}")
+                        
+                    raw_name = data.get("name", "Tema Tecnológico").strip('"\' *-\n')
+                    import re
+                    # Limpiar prefijos como "Proyecto 1:", "Fragmento 1:", "Tema:"
+                    clean_name = re.sub(r'^(Fragmento|Proyecto|Tema)\s*\d*[:\-]?\s*', '', raw_name, flags=re.IGNORECASE)
+                    clean_name = clean_name.split('\n')[0].strip('"\' *-\n')
+                    if len(clean_name) < 3:
+                        clean_name = "Tema Tecnológico"
+                    return clean_name
                 
             return "Tema Tecnológico"
         except Exception as e:

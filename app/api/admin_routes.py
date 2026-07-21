@@ -1,16 +1,45 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from app.services.visualization_service import visualization_service
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-from typing import Optional
+from typing import Optional, List, Dict
+
+@router.get("/careers", tags=["Admin Panel"])
+async def get_careers():
+    from app.services.qdrant_service import qdrant_service
+    try:
+        _, payloads = qdrant_service.get_all_embeddings()
+        careers = {}
+        if payloads:
+            for meta in payloads:
+                u_id = meta.get("university_id")
+                c_id = meta.get("career_id")
+                if u_id and c_id:
+                    if u_id not in careers:
+                        careers[u_id] = set()
+                    careers[u_id].add(c_id)
+        
+        result = []
+        for u, cs in careers.items():
+            result.append({
+                "university_id": u,
+                "careers": list(cs)
+            })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/clusters-3d", response_class=HTMLResponse, tags=["Admin Panel"])
-async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None):
+async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None, university_id: Optional[str] = None, career_id: Optional[str] = None):
     
     try:
-        html_content = visualization_service.generate_3d_html(filter_cluster_id=filter_cluster_id)
+        html_content = visualization_service.generate_3d_html(filter_cluster_id=filter_cluster_id, university_id=university_id, career_id=career_id)
         if "<h1>Error" in html_content:
             return HTMLResponse(content=html_content, status_code=500)
         return HTMLResponse(content=html_content, status_code=200)
@@ -18,9 +47,9 @@ async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/clusters-2d-html", response_class=HTMLResponse, tags=["Admin Panel"])
-async def get_clusters_2d_html(filter_cluster_id: Optional[str] = None):
+async def get_clusters_2d_html(filter_cluster_id: Optional[str] = None, university_id: Optional[str] = None, career_id: Optional[str] = None):
     try:
-        html_content = visualization_service.generate_2d_html(filter_cluster_id=filter_cluster_id)
+        html_content = visualization_service.generate_2d_html(filter_cluster_id=filter_cluster_id, university_id=university_id, career_id=career_id)
         if "<h1>Error" in html_content:
             return HTMLResponse(content=html_content, status_code=500)
         return HTMLResponse(content=html_content, status_code=200)
@@ -39,11 +68,11 @@ async def get_clusters_2d():
         raise HTTPException(status_code=500, detail=f"{str(e)}\n{tb}")
 
 @router.get("/clusters-stats", tags=["Admin Panel"])
-async def get_clusters_stats():
+async def get_clusters_stats(university_id: Optional[str] = None, career_id: Optional[str] = None):
     
     try:
         from app.services.clustering_service import clustering_engine
-        stats = visualization_service.get_cluster_stats()
+        stats = visualization_service.get_cluster_stats(university_id=university_id, career_id=career_id)
         if "error" in stats:
             raise HTTPException(status_code=500, detail=stats["error"])
         stats["is_clustering_running"] = clustering_engine.is_running
@@ -166,7 +195,9 @@ async def execute_clustering(background_tasks: BackgroundTasks):
                                 payloads=[{
                                     "project_id": p["id"],
                                     "text": chunk,
-                                    "source_url": p["source_url"]
+                                    "source_url": p["source_url"],
+                                    "university_id": p.get("university_id"),
+                                    "career_id": p.get("career_id")
                                 } for chunk in chunks]
                             )
                     # Quitar de pendientes y borrar el txt temporal
@@ -193,6 +224,7 @@ async def execute_clustering(background_tasks: BackgroundTasks):
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Header, Response
 from app.core.config_manager import config_manager
+from app.core.config import settings
 from pydantic import BaseModel
 import hashlib
 import json
@@ -202,6 +234,7 @@ from typing import List, Dict, Any, Optional
 class ConfigUpdateRequest(BaseModel):
     allowed_extensions: list[str]
     llm_provider: str = "ollama"
+    groq_model: Optional[str] = "llama-3.1-8b-instant"
     drive_folder_id: str = ""
     accepted_drive_folders: List[Dict[str, str]] = []
     exclusion_rules: List[str] = []
@@ -213,8 +246,30 @@ class ConfigUpdateRequest(BaseModel):
     authorId: Optional[str] = None
 
 @router.get("/config")
-async def get_system_config(response: Response, if_none_match: Optional[str] = Header(None)):
-    config_data = config_manager.get_config()
+async def get_system_config(
+    response: Response, 
+    projectId: Optional[str] = None, 
+    if_none_match: Optional[str] = Header(None)
+):
+    config_data = config_manager.get_config(projectId)
+    
+    # If projectId given, override team members limit from the real DB value
+    if projectId:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/team-size"
+                )
+                if r.status_code == 200:
+                    proj_info = r.json()
+                    real_team_size = proj_info.get("team_size")
+                    if real_team_size is not None:
+                        config_data = dict(config_data)
+                        config_data["max_team_members"] = real_team_size
+                        if config_data.get("min_team_members", 1) > real_team_size:
+                            config_data["min_team_members"] = 1
+        except Exception as e:
+            logger.warning(f"No se pudo obtener team_size real del proyecto {projectId}: {e}")
     
     # Generate ETag
     config_json = json.dumps(config_data, sort_keys=True)
@@ -227,13 +282,28 @@ async def get_system_config(response: Response, if_none_match: Optional[str] = H
     response.headers["ETag"] = etag
     return config_data
 
+@router.get("/groq-models")
+async def get_groq_models():
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(f"{settings.LLM_SERVICE_URL}/api/v1/llm/groq-models")
+            res.raise_for_status()
+            return res.json()
+    except Exception as e:
+        logger.error(f"Error fetching groq models: {e}")
+        return {"status": "error", "data": []}
+
 @router.post("/config")
-async def update_system_config(request: ConfigUpdateRequest):
-    old_config = config_manager.get_config()
+async def update_system_config(request: ConfigUpdateRequest, projectId: Optional[str] = None):
+    if request.min_team_members > request.max_team_members:
+        raise HTTPException(status_code=400, detail="La cantidad mínima no puede ser mayor a la cantidad máxima.")
+
+    old_config = config_manager.get_config(projectId)
     
     new_config = {
         "allowed_extensions": request.allowed_extensions,
         "llm_provider": request.llm_provider,
+        "groq_model": request.groq_model,
         "drive_folder_id": request.drive_folder_id,
         "accepted_drive_folders": request.accepted_drive_folders,
         "exclusion_rules": request.exclusion_rules,
@@ -241,6 +311,18 @@ async def update_system_config(request: ConfigUpdateRequest):
         "min_team_members": request.min_team_members,
         "max_team_members": request.max_team_members
     }
+    
+    if projectId:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.patch(
+                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/team-size",
+                    json={"team_size": request.max_team_members}
+                )
+                res.raise_for_status()
+        except Exception as e:
+            logger.warning(f"No se pudo actualizar team_size en proyecto {projectId}: {e}")
+
     
     # --- Generar notificación descriptiva ---
     title_parts = []
@@ -292,12 +374,11 @@ async def update_system_config(request: ConfigUpdateRequest):
         
     # ----------------------------------------
 
-    success = config_manager.save_config(new_config)
+    success = config_manager.save_config(new_config, projectId)
     if success:
         # Log to ActivityLog if authorId is provided
         if request.authorId and body_parts:
             try:
-                import httpx
                 async with httpx.AsyncClient() as client:
                     await client.post(
                         "http://authentication-back-corvus:3000/internal/activity-log",
@@ -462,33 +543,103 @@ class AcceptDriveFolderRequest(BaseModel):
 @router.post("/drive/accept")
 async def accept_drive_folder(request: AcceptDriveFolderRequest):
     from app.services.drive_service import DriveService
+    from app.core.config import settings
     try:
         drive_service = DriveService()
         folder_info = drive_service.get_folder_info(request.folder_id)
         if not folder_info:
             raise HTTPException(status_code=404, detail="Carpeta no encontrada o sin acceso")
-            
+
+        # --- Extraer el correo del propietario de la carpeta ---
+        sharing_user = folder_info.get("sharingUser", {})
+        owner_email = sharing_user.get("emailAddress", "")
+
+        if not owner_email:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo determinar el correo del propietario de la carpeta."
+            )
+
+        # --- Verificar que el correo pertenece a un profesor en el sistema ---
+        professor_info = None
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/admin/find-professor-by-email",
+                    params={"email": owner_email},
+                    timeout=5.0
+                )
+                if resp.status_code == 200:
+                    professor_info = resp.json()
+        except Exception as auth_err:
+            logger.error(f"Error contacting auth service: {auth_err}")
+
+        if not professor_info:
+            raise HTTPException(
+                status_code=403,
+                detail=f"El correo '{owner_email}' no pertenece a ningún profesor registrado en Corvus. "
+                       f"El profesor debe compartir la carpeta con el mismo correo con el que se registró (principal o secundario)."
+            )
+
         current_config = config_manager.get_config()
         accepted_folders = current_config.get("accepted_drive_folders", [])
-        
-        # Check if already accepted
-        if any(f["id"] == request.folder_id for f in accepted_folders):
-            return {"message": "La carpeta ya estaba aceptada", "config": current_config}
-            
-        accepted_folders.append({
+
+        # Actualizar si ya existía o agregar nuevo
+        existing_idx = next((i for i, f in enumerate(accepted_folders) if f["id"] == request.folder_id), -1)
+        folder_record = {
             "id": folder_info["id"],
             "name": folder_info.get("name", "Carpeta sin nombre"),
-            "sharingUser": folder_info.get("sharingUser", {})
-        })
-        
+            "sharingUser": sharing_user,
+            "professor_id": professor_info.get("id"),
+            "professor_name": professor_info.get("full_name") or professor_info.get("email"),
+            "university_id": professor_info.get("university_id"),
+            "career_id": professor_info.get("career_id"),
+        }
+
+        if existing_idx >= 0:
+            accepted_folders[existing_idx] = folder_record
+        else:
+            accepted_folders.append(folder_record)
+
         current_config["accepted_drive_folders"] = accepted_folders
         if config_manager.save_config(current_config):
-            return {"message": "Carpeta aceptada con éxito", "config": current_config}
+            return {
+                "message": "Carpeta aceptada con éxito",
+                "professor": professor_info.get("full_name") or professor_info.get("email"),
+                "university_id": professor_info.get("university_id"),
+                "career_id": professor_info.get("career_id"),
+            }
         else:
             raise HTTPException(status_code=500, detail="Error al guardar configuración")
-            
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error accepting drive folder: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/drive/professor-folders")
+async def get_professor_folders(professor_id: str):
+    """
+    Returns the accepted Drive folders that belong to a specific professor.
+    Called by the Auth service when the professor views their profile.
+    """
+    try:
+        current_config = config_manager.get_config()
+        accepted_folders = current_config.get("accepted_drive_folders", [])
+        professor_folders = [
+            {
+                "folder_id": f["id"],
+                "folder_name": f["name"],
+                "status": "synced",
+                "university_id": f.get("university_id"),
+                "career_id": f.get("career_id"),
+            }
+            for f in accepted_folders
+            if f.get("professor_id") == professor_id
+        ]
+        return professor_folders
+    except Exception as e:
+        logger.error(f"Error fetching professor folders: {e}")
         raise HTTPException(status_code=500, detail=str(e))
