@@ -322,6 +322,12 @@ async def get_blue_ocean_niches(page: int = 1, limit: int = 10):
             blue_ocean_db.register_niche_if_not_exists(p_id)
             niche_state = blue_ocean_db.get_niche(p_id)
             
+            # Intentar obtener el título oficial extraído por la IA
+            analysis_data = niche_state.get('analysis_data')
+            official_title = name
+            if analysis_data and isinstance(analysis_data, dict):
+                official_title = analysis_data.get('titulo_propuesta', name)
+            
             hours_since_creation = (time.time() - niche_state.get('created_at', time.time())) / 3600.0
             views = niche_state.get('view_count', 0)
             gravity_score = (views + 1) / ((hours_since_creation + 2) ** 1.5)
@@ -330,12 +336,12 @@ async def get_blue_ocean_niches(page: int = 1, limit: int = 10):
                 "id": p_id,
                 "category": "INNOVACIÓN ACADÉMICA",
                 "tag": "Océano Azul Real",
-                "title": name,
+                "title": official_title,
                 "description": "Este proyecto ha sido clasificado como una anomalía semántica de alta varianza, indicando un enfoque único e inexplorado respecto a todos los demás trabajos en la base de datos.",
                 "view_count": views,
                 "recent_viewers": niche_state.get('recent_viewers', []),
                 "analysis_status": niche_state.get('analysis_status', 'pending'),
-                "analysis_data": niche_state.get('analysis_data'),
+                "analysis_data": analysis_data,
                 "_gravity_score": gravity_score
             })
             
