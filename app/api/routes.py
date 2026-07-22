@@ -318,7 +318,7 @@ async def get_blue_ocean_niches(request: Request, page: int = 1, limit: int = 10
             email = user_data.get('email')
             if email:
                 try:
-                    resp = requests.get(f"http://payments-back-corvus:3005/pagos/suscripcion/{email}", timeout=2)
+                    resp = requests.get(f"http://payments-service:8001/pagos/suscripcion/{email}", timeout=2)
                     if resp.status_code == 200:
                         is_pro = resp.json().get('activa', False)
                 except Exception as e:
