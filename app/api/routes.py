@@ -296,8 +296,10 @@ async def check_blue_ocean(project_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from fastapi import Request
+
 @router.get("/blue-ocean-niches")
-async def get_blue_ocean_niches(page: int = 1, limit: int = 10):
+async def get_blue_ocean_niches(request: Request, page: int = 1, limit: int = 10):
     
     from app.services.qdrant_service import qdrant_service
     from app.services.blue_ocean_db import blue_ocean_db
@@ -305,6 +307,25 @@ async def get_blue_ocean_niches(page: int = 1, limit: int = 10):
 
     
     niches = []
+    is_pro = False
+    
+    user_data_str = request.headers.get("x-user-data")
+    if user_data_str:
+        import json
+        import requests
+        try:
+            user_data = json.loads(user_data_str)
+            email = user_data.get('email')
+            if email:
+                try:
+                    resp = requests.get(f"http://payments-back-corvus:3005/pagos/suscripcion/{email}", timeout=2)
+                    if resp.status_code == 200:
+                        is_pro = resp.json().get('activa', False)
+                except Exception as e:
+                    print(f"Error calling payments for pro status: {e}")
+        except Exception:
+            pass
+
     try:
         vectors, payloads = qdrant_service.get_all_embeddings()
         
@@ -351,12 +372,24 @@ async def get_blue_ocean_niches(page: int = 1, limit: int = 10):
         for niche in niches:
             niche.pop('_gravity_score', None)
             
-        # Paginación
         total = len(niches)
+        max_allowed = total if is_pro else int(total * 0.40)
+        pro_locked_count = total - max_allowed if not is_pro else 0
+        
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
-        niches = niches[start_idx:end_idx]
         
+        reached_pro_limit = False
+        
+        if start_idx >= max_allowed:
+            niches = []
+            reached_pro_limit = not is_pro
+        else:
+            if end_idx >= max_allowed:
+                end_idx = max_allowed
+                reached_pro_limit = not is_pro
+            niches = niches[start_idx:end_idx]
+            
     except Exception as e:
 
         print(f"Error extrayendo los océanos azules desde ChromaDB: {e}")
@@ -366,7 +399,11 @@ async def get_blue_ocean_niches(page: int = 1, limit: int = 10):
     return {
         "title": "Océanos Azules (Proyectos Reales)",
         "description": "Descubre los verdaderos océanos azules en la intersección de la tecnología y la academia, calculados en tiempo real por Corvus HDBSCAN.",
-        "niches": niches
+        "niches": niches,
+        "is_pro": is_pro,
+        "total_oceans": locals().get('total', 0),
+        "pro_locked_count": locals().get('pro_locked_count', 0),
+        "reached_pro_limit": locals().get('reached_pro_limit', False)
     }
 
 from pydantic import BaseModel
@@ -389,6 +426,28 @@ async def track_niche_view(niche_id: str, payload: NicheViewRequest):
         "analysis_status": niche_state.get("analysis_status"),
         "analysis_data": niche_state.get("analysis_data")
     }
+
+@router.post("/reprocess-all-blue-oceans")
+async def reprocess_all_blue_oceans():
+    from app.services.blue_ocean_db import blue_ocean_db
+    from app.services.blue_ocean_worker import blue_ocean_worker
+    
+    niches = ['blue_01.md', 'salud_00.md', 'blue_03.md', 'blue_05.md']
+    results = {}
+    
+    for niche_id in niches:
+        title = niche_id.replace('proyecto_', '').replace('.md', '').replace('.pdf', '').replace('_', ' ').title()
+        category = "INNOVACIÓN ACADÉMICA"
+        description = f"Investigación y desarrollo de tecnologías avanzadas y soluciones de ingeniería en el dominio de {title}."
+        
+        data = await blue_ocean_worker._call_llm_service(title, description, category)
+        if data:
+            blue_ocean_db.update_analysis(niche_id, data)
+            results[niche_id] = data.get("titulo_propuesta")
+        else:
+            results[niche_id] = "FAILED"
+            
+    return {"status": "success", "processed": results}
 
 from fastapi import Header
 
@@ -765,7 +824,17 @@ async def get_drift_metrics():
 async def get_analysis_status(user_id: str):
     if user_id in analysis_progress_store:
         return analysis_progress_store[user_id]
-    return {"phase": 0, "message": ""}
+        
+    draft_path = os.path.join(DRAFTS_DIR, f"{user_id}_draft.json")
+    if os.path.exists(draft_path):
+        try:
+            with open(draft_path, "r", encoding="utf-8") as f:
+                draft = json.load(f)
+            return {"phase": 9, "message": "Pre-validación completada", "uploaded_by": draft.get("uploaded_by")}
+        except Exception:
+            pass
+            
+    return {"phase": -1, "message": "No hay un análisis activo para esta propuesta."}
 
 async def _run_analysis_background(user_id: str, draft_path: str):
     import traceback
