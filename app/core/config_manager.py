@@ -36,14 +36,10 @@ class ConfigManager:
         # Si la configuración del proyecto no existe, retornar la configuración global
         if project_id and not os.path.exists(config_path):
             config_path = self.default_config_path
-            is_fallback = True
 
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                if is_fallback:
-                    data["project_sections"] = []
-                    data["exclusion_rules"] = []
                 return data
         except Exception as e:
             logger.error(f"Error leyendo config ({config_path}): {e}")
