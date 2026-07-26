@@ -253,23 +253,27 @@ async def get_system_config(
 ):
     config_data = config_manager.get_config(projectId)
     
-    # If projectId given, override team members limit from the real DB value
+    # If projectId given, override config from the real DB value
     if projectId:
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 r = await client.get(
-                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/team-size"
+                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/rules"
                 )
                 if r.status_code == 200:
                     proj_info = r.json()
-                    real_team_size = proj_info.get("team_size")
-                    if real_team_size is not None:
-                        config_data = dict(config_data)
-                        config_data["max_team_members"] = real_team_size
-                        if config_data.get("min_team_members", 1) > real_team_size:
-                            config_data["min_team_members"] = 1
+                    config_data = dict(config_data)
+                    config_data["max_team_members"] = proj_info.get("max_team_members", config_data.get("max_team_members", 5))
+                    config_data["min_team_members"] = proj_info.get("min_team_members", config_data.get("min_team_members", 1))
+                    
+                    if proj_info.get("allowed_extensions"):
+                        config_data["allowed_extensions"] = proj_info.get("allowed_extensions")
+                    if proj_info.get("exclusion_rules") is not None:
+                        config_data["exclusion_rules"] = proj_info.get("exclusion_rules")
+                    if proj_info.get("project_sections") is not None:
+                        config_data["project_sections"] = proj_info.get("project_sections")
         except Exception as e:
-            logger.warning(f"No se pudo obtener team_size real del proyecto {projectId}: {e}")
+            logger.warning(f"No se pudieron obtener las reglas reales del proyecto {projectId}: {e}")
     
     # Generate ETag
     config_json = json.dumps(config_data, sort_keys=True)
@@ -316,12 +320,18 @@ async def update_system_config(request: ConfigUpdateRequest, projectId: Optional
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 res = await client.patch(
-                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/team-size",
-                    json={"team_size": request.max_team_members}
+                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/rules",
+                    json={
+                        "max_team_members": request.max_team_members,
+                        "min_team_members": request.min_team_members,
+                        "allowed_extensions": request.allowed_extensions,
+                        "exclusion_rules": request.exclusion_rules,
+                        "project_sections": request.project_sections
+                    }
                 )
                 res.raise_for_status()
         except Exception as e:
-            logger.warning(f"No se pudo actualizar team_size en proyecto {projectId}: {e}")
+            logger.warning(f"No se pudieron actualizar las reglas en el proyecto {projectId}: {e}")
 
     
     # --- Generar notificación descriptiva ---
@@ -643,3 +653,9 @@ async def get_professor_folders(professor_id: str):
     except Exception as e:
         logger.error(f"Error fetching professor folders: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/test-qdrant-payloads/{project_id}")
+def test_qdrant_payloads(project_id: str):
+    from app.services.qdrant_service import qdrant_service
+    payloads = qdrant_service.get_project_payloads(project_id)
+    return {"project_id": project_id, "payload_count": len(payloads), "payloads": payloads}

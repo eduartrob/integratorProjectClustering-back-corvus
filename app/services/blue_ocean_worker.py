@@ -55,7 +55,7 @@ class BlueOceanWorker:
                     title = niche_id.replace('proyecto_', '').replace('.md', '').replace('.pdf', '').replace('_', ' ').title()
                     
                     # Extraer el texto real de Qdrant para este proyecto
-                    description = "Nicho inexplorado detectado por baja colisión semántica."
+                    description = f"Oportunidad de investigación e innovación tecnológica avanzada enfocada en la categoría {category} sobre el dominio {title}."
                     try:
                         payloads = qdrant_service.get_project_payloads(niche_id)
                         project_texts = []
@@ -67,8 +67,10 @@ class BlueOceanWorker:
                         
                         if project_texts:
                             full_text = "\n".join(project_texts)
-                            # Limitar a ~3000 palabras (aprox 15000-20000 caracteres)
-                            description = full_text[:15000]
+                            if "colisión semántica" in full_text.lower() or "nicho inexplorado" in full_text.lower() or len(full_text.strip()) < 50:
+                                description = f"Investigación y desarrollo de tecnologías avanzadas y soluciones de ingeniería en el dominio de {title}."
+                            else:
+                                description = full_text[:15000]
                         else:
                             logger.warning(f"Worker: No se encontró texto para {niche_id} en Qdrant.")
                     except Exception as e:
