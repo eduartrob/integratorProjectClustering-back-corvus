@@ -1002,13 +1002,11 @@ async def analyze_draft_proposal(user_id: str = Form(...)):
 async def get_analysis_result(user_id: str):
     
     if user_id in analysis_result_store:
-        result = analysis_result_store.pop(user_id)
-        analysis_progress_store.pop(user_id, None)
+        result = analysis_result_store.get(user_id)
         
-        # IMPORTANTE: NO borrar el borrador aquí. 
-        # El alumno lo necesita para continuar con el "Análisis exhaustivo".
-        # Solo se borrará cuando llame explícitamente a DELETE /draft-proposal/{user_id}
-        # o cuando termine el análisis exhaustivo.
+        # IMPORTANTE: Mantenemos el resultado en caché RAM (no hacemos .pop())
+        # para que posteriores consultas (o lecturas de otros miembros del equipo)
+        # se sirvan instantáneamente a 1ms bajo alta concurrencia.
             
         return result
 
@@ -1200,11 +1198,11 @@ async def validate_idea_endpoint(req: ValidateIdeaRequest):
                     docs  = search_results["documents"][q_idx]
                     metas = search_results["metadatas"][q_idx]
                     for doc, meta in zip(docs, metas):
-                        p_id = meta.get("project_id", "Desconocido")
-                        clean_title = p_id.replace('proyecto_', '').replace('.md', '').replace('.pdf', '').replace('_', ' ').title() if p_id != "Desconocido" else "Desconocido"
+                        # Se omite el uso del nombre del archivo (p_id) como título para evitar que el LLM 
+                        # responda con el nombre del archivo (ej. "Blue 03"). En su lugar se fuerza a describirlo.
                         similar_projects.append({
-                            "title": clean_title,
-                            "description": doc[:200]
+                            "title": "Proyecto anterior relacionado",
+                            "description": doc[:400]
                         })
     except Exception as e:
         print(f"Error al buscar similares: {e}")

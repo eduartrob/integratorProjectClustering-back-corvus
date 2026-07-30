@@ -335,59 +335,64 @@ async def update_system_config(request: ConfigUpdateRequest, projectId: Optional
 
     
     # --- Generar notificación descriptiva ---
-    title_parts = []
-    body_parts = []
+    projectName = None
+    if projectId:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/team-size"
+                )
+                if res.status_code == 200:
+                    proj_info = res.json()
+                    projectName = proj_info.get("name")
+        except Exception:
+            pass
+
+    author = request.authorName if request.authorName else "Un docente"
+    if projectName:
+        title = f"{author} actualizó las reglas de '{projectName}'"
+    else:
+        title = f"{author} actualizó las reglas del proyecto"
     
     old_rules = set(old_config.get("exclusion_rules", []))
     new_rules = set(request.exclusion_rules)
     blocked = new_rules - old_rules
     unblocked = old_rules - new_rules
     
-    if blocked:
-        body_parts.append(f"Se han bloqueado los temas: {', '.join(blocked)}")
-    if unblocked:
-        body_parts.append(f"Se han desbloqueado los temas: {', '.join(unblocked)}")
-        
-    if blocked or unblocked:
-        title_parts.append("Se han actualizado los Temas para Proyecto")
-        
     old_sec_names = set(s.get("nombre", "") for s in old_config.get("project_sections", []))
     new_sec_names = set(s.get("nombre", "") for s in request.project_sections)
-    
     added_sections = new_sec_names - old_sec_names
     removed_sections = old_sec_names - new_sec_names
     
-    if added_sections:
-        body_parts.append(f"Secciones añadidas: {', '.join(added_sections)}")
-    if removed_sections:
-        body_parts.append(f"Secciones eliminadas: {', '.join(removed_sections)}")
-        
-    if added_sections or removed_sections:
-        title_parts.append("Se ha actualizado la Estructura de Proyecto")
-
     old_min = old_config.get("min_team_members", 1)
     old_max = old_config.get("max_team_members", 5)
+
+    detalles = []
+    
+    if blocked:
+        detalles.append(f"🚫 Temas bloqueados: {', '.join(blocked)}")
+    if unblocked:
+        detalles.append(f"✅ Temas permitidos: {', '.join(unblocked)}")
+        
+    if added_sections:
+        detalles.append(f"➕ Nuevas secciones: {', '.join(added_sections)}")
+    if removed_sections:
+        detalles.append(f"➖ Secciones quitadas: {', '.join(removed_sections)}")
+        
     if old_min != request.min_team_members or old_max != request.max_team_members:
-        body_parts.append(f"Nuevo límite de integrantes de equipo: {request.min_team_members} a {request.max_team_members} alumnos")
-        if "Se ha actualizado la Estructura de Proyecto" not in title_parts:
-            title_parts.append("Se ha actualizado la Estructura de Proyecto")
+        detalles.append(f"👥 Equipos: de {request.min_team_members} a {request.max_team_members} integrantes")
         
-    if not title_parts:
-        title = "Nuevas reglas y estructura de proyecto"
+    if detalles:
+        body = "\n".join(detalles)
     else:
-        title = " y ".join(title_parts)
-        
-    if not body_parts:
-        body = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!"
-    else:
-        body = ". ".join(body_parts) + "."
+        body = "Se actualizaron las reglas de evaluación."
         
     # ----------------------------------------
 
     success = config_manager.save_config(new_config, projectId)
     if success:
         # Log to ActivityLog if authorId is provided
-        if request.authorId and body_parts:
+        if request.authorId:
             try:
                 async with httpx.AsyncClient() as client:
                     await client.post(
@@ -403,7 +408,7 @@ async def update_system_config(request: ConfigUpdateRequest, projectId: Optional
                 print(f"Failed to log ActivityLog: {e}")
 
         # Trigger silent notification after saving
-        await notify_rules(title=title, body=body, authorName=request.authorName, authorPhotoUrl=request.authorPhotoUrl)
+        await notify_rules(title=title, body=body, authorName=request.authorName, authorPhotoUrl=request.authorPhotoUrl, projectId=projectId, authorId=request.authorId)
         return {"message": "Configuración actualizada con éxito.", "config": new_config}
     raise HTTPException(status_code=500, detail="Error al actualizar la configuración.")
 
@@ -430,32 +435,102 @@ async def generate_sections():
     raise HTTPException(status_code=500, detail="Fallo en la generación con IA.")
 
 @router.post("/notify-rules", tags=["Admin Panel"])
-async def notify_rules(title: str = "Nuevas reglas y estructura de proyecto", body: str = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!", authorName: Optional[str] = None, authorPhotoUrl: Optional[str] = None):
+async def notify_rules(title: str = "Nuevas reglas de proyecto", body: str = "Los profesores han actualizado las reglas.", authorName: Optional[str] = None, authorPhotoUrl: Optional[str] = None, projectId: Optional[str] = None, authorId: Optional[str] = None):
     print("📢 Intentando notificar a los dispositivos móviles (Push Visible)...", flush=True)
     try:
+        from app.core.config import settings
+        import asyncio
         async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "http://notifications-service:3001/api/notifications/topic/push",
-                json={
-                    "topic": "config_updates",
-                    "title": title,
-                    "body": body,
-                    "data": {
-                        "type": "CONFIG_UPDATED",
-                        "authorName": authorName or "",
-                        "authorPhotoUrl": authorPhotoUrl or ""
+            if not projectId:
+                # Fallback to global topic if no projectId is provided
+                resp = await client.post(
+                    "http://notifications-service:3001/api/notifications/topic/push",
+                    json={
+                        "topic": "config_updates",
+                        "title": title,
+                        "body": body,
+                        "data": {
+                            "type": "CONFIG_UPDATED",
+                            "authorName": authorName or "",
+                            "authorPhotoUrl": authorPhotoUrl or "",
+                            "projectId": "",
+                            "authorId": authorId or ""
+                        }
                     }
-                }
+                )
+                return {"message": "Notificación global enviada."}
+
+            # 1. Fetch project members
+            members_resp = await client.get(
+                f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/members"
             )
-            if resp.status_code == 200:
-                print("✅ Notificación enviada correctamente al servidor de Node.")
-                return {"message": "Notificación enviada a los dispositivos."}
-            else:
-                print(f"❌ Error al notificar: Código {resp.status_code}, Body: {resp.text}")
-                return {"message": "Config guardada, pero falló la notificación."}
+            
+            if members_resp.status_code != 200:
+                print(f"❌ Error al obtener miembros del proyecto: {members_resp.text}")
+                return {"message": "Config guardada, pero falló al obtener miembros del proyecto."}
+                
+            members_data = members_resp.json()
+            students = members_data.get("students", [])
+            professors = members_data.get("professors", [])
+            
+            # Remove the author from the notification list
+            if authorId:
+                if authorId in students:
+                    students.remove(authorId)
+                if authorId in professors:
+                    professors.remove(authorId)
+            
+            common_data = {
+                "type": "CONFIG_UPDATED",
+                "authorName": authorName or "",
+                "authorPhotoUrl": authorPhotoUrl or "",
+                "projectId": projectId or "",
+                "authorId": authorId or ""
+            }
+            
+            tasks = []
+            
+            # 2. Notify students
+            for student_id in students:
+                tasks.append(
+                    client.post(
+                        "http://notifications-service:3001/api/notifications/topic/push",
+                        json={
+                            "topic": f"user_{student_id}",
+                            "title": title,
+                            "body": body,
+                            "data": common_data
+                        }
+                    )
+                )
+                
+            # 3. Notify professors
+            prof_title = "Reglas de proyecto modificadas"
+            prof_body = f"Tu compañero {authorName or 'profesor'} ha modificado las reglas."
+            for prof_id in professors:
+                tasks.append(
+                    client.post(
+                        "http://notifications-service:3001/api/notifications/topic/push",
+                        json={
+                            "topic": f"user_{prof_id}",
+                            "title": prof_title,
+                            "body": prof_body,
+                            "data": common_data
+                        }
+                    )
+                )
+                
+            # Execute all notifications concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            success_count = sum(1 for r in results if not isinstance(r, Exception) and getattr(r, 'status_code', 0) == 200)
+            print(f"✅ Notificaciones enviadas correctamente: {success_count}/{len(tasks)}")
+            
+            return {"message": f"Notificaciones enviadas a {success_count} usuarios."}
+            
     except Exception as e:
-        print(f"❌ Error llamando al microservicio de notificaciones: {e}")
-        return {"message": "Falló la comunicación con notifications-service."}
+        print(f"❌ Error llamando a los microservicios: {e}")
+        return {"message": "Falló la comunicación con los microservicios."}
 
 
 @router.get("/recent-projects", tags=["Admin Panel"])
