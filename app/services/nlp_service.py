@@ -75,13 +75,91 @@ class NLPService:
                 return {"ok": False, "palabra_bloqueada": palabra}
         return {"ok": True, "palabra_bloqueada": None}
 
+    @staticmethod
+    def generar_variantes_seccion(seccion_nombre: str, keywords_custom: list = None) -> set[str]:
+        """
+        Genera dinámicamente todas las permutaciones y variantes posibles de un título de sección:
+        - Mayúsculas / Minúsculas / Title Case (mediante re.IGNORECASE)
+        - Con acentos / Sin acentos
+        - Singular / Plural
+        - Sin conectores (de, del, la, el, los, las, etc.)
+        - Mapeos de sinónimos académicos estándar
+        """
+        variantes = set()
+        
+        if keywords_custom:
+            variantes.update([str(k).strip() for k in keywords_custom if k])
+            
+        base = str(seccion_nombre or "").strip()
+        if not base:
+            return variantes
+
+        variantes.add(base)
+        lower_name = base.lower()
+
+        # 1. Semántica académica estándar
+        if "problem" in lower_name:
+            variantes.update(["problema", "problemas", "problemática", "problematica", "problema a resolver", "problemas a resolver", "planteamiento del problema", "planteamiento", "definición del problema", "definicion del problema"])
+        if "objetiv" in lower_name:
+            variantes.update(["objetivo", "objetivos", "objetivo general", "objetivos generales", "objetivo específico", "objetivo especifico", "objetivos específicos", "objetivos especificos"])
+        if "justificac" in lower_name:
+            variantes.update(["justificación", "justificacion", "justificaciones", "motivo", "razones"])
+        if "metodolog" in lower_name or "tecnolog" in lower_name:
+            variantes.update(["metodología", "metodologia", "metodologías", "metodologias", "tecnologías", "tecnologias", "stack tecnológico", "stack tecnologico"])
+        if "resultado" in lower_name:
+            variantes.update(["resultados esperados", "resultado esperado", "resultados", "resultado"])
+        if "nombr" in lower_name or "titul" in lower_name:
+            variantes.update(["nombre del proyecto", "título del proyecto", "titulo del proyecto", "propuesta de anteproyecto", "anteproyecto"])
+        if "introduc" in lower_name:
+            variantes.update(["introducción", "introduccion", "introducción general", "introduccion general", "presentación", "presentacion", "antecedentes", "contexto"])
+        if "alcance" in lower_name or "funcionalidad" in lower_name:
+            variantes.update(["alcance", "alcances", "funcionalidades", "funcionalidad", "características", "caracteristicas", "funciones"])
+        if "conclus" in lower_name:
+            variantes.update(["conclusión", "conclusion", "conclusiones", "cierre", "resumen"])
+        if "requerim" in lower_name:
+            variantes.update(["requerimientos", "requerimiento", "requisitos", "requisito", "requerimientos funcionales", "requerimientos no funcionales"])
+        if "marco" in lower_name or "teóric" in lower_name or "teorico" in lower_name:
+            variantes.update(["marco teórico", "marco teorico", "marco de referencia", "bases teóricas", "bases teoricas", "fundamentos"])
+
+        # 2. Generación sin conectores
+        words = [w for w in re.findall(r'\w+', lower_name) if w not in ["de", "del", "la", "el", "los", "las", "en", "para", "a", "por", "con", "un", "una"]]
+        if len(words) >= 2:
+            variantes.add(" ".join(words))
+
+        # 3. Singular y Plural
+        for item in list(variantes):
+            item_str = item.lower()
+            if len(item_str) > 3:
+                if item_str.endswith("es"):
+                    variantes.add(item_str[:-2])
+                elif item_str.endswith("s"):
+                    variantes.add(item_str[:-1])
+                else:
+                    variantes.add(item_str + "s")
+
+        # 4. Normalización con y sin acentos
+        final_set = set()
+        for item in variantes:
+            it_str = item.strip()
+            if not it_str:
+                continue
+
+            final_set.add(it_str.lower())
+
+            no_acc = ''.join(c for c in unicodedata.normalize('NFD', it_str) if unicodedata.category(c) != 'Mn')
+            final_set.add(no_acc.lower())
+
+        return final_set
+
     # ── FILTRO 2B: Secciones del profesor ─────────────────────────────────
-    def validar_secciones_profesor(self, texto_crudo: str) -> dict:
+    def validar_secciones_profesor(self, texto_crudo: str, project_id: str = None) -> dict:
         """
         Verifica que el documento tenga las secciones que los profesores definen.
         Retorna: {ok, faltantes, encontradas, completitud_pct}
         """
         t = texto_crudo.lower()
+        # Eliminar acentos del documento para que los regex \b y variantes sin acento coincidan perfectamente
+        t = ''.join(c for c in unicodedata.normalize('NFD', t) if unicodedata.category(c) != 'Mn')
         # Limpiar tags HTML y formato Markdown (negritas/italicas) pero conservar nuevas lineas y encabezados (#)
         t = re.sub(r'<br\s*/?>', '\n', t)
         t = re.sub(r'[*_|]', ' ', t)
@@ -89,7 +167,7 @@ class NLPService:
         t = re.sub(r'[ \t]+', ' ', t)
         faltantes, encontradas = [], []
         
-        project_sections = config_manager.get_project_sections()
+        project_sections = config_manager.get_project_sections(project_id)
         
         if not project_sections:
             return {
@@ -99,40 +177,22 @@ class NLPService:
                 "completitud_pct": 100.0,
             }
 
-        # Construir lookup de keywords por nombre de sección desde constants.py (fallback)
-        _constants_lookup = {s["nombre"]: s["keywords"] for s in constants.SECCIONES_PROFESOR}
-
         obligatorias_total = sum(1 for s in project_sections if s.get("obligatoria", False))
 
         for seccion in project_sections:
             seccion_nombre = seccion.get("nombre", "")
-            kws = seccion.get("keywords", [])
+            custom_kws = seccion.get("keywords", [])
 
-            # Si el profe no definió keywords, buscar en constants.py por nombre similar
-            if not kws:
-                for const_nombre, const_kws in _constants_lookup.items():
-                    if const_nombre.lower() in seccion_nombre.lower() or seccion_nombre.lower() in const_nombre.lower():
-                        kws = const_kws
-                        logger.debug(f"[Filtro 2B] Sección '{seccion_nombre}' sin keywords → usando fallback de constants: {const_nombre}")
-                        break
-                        
-                # Si tampoco está en constants.py (es una sección totalmente nueva), usamos su propio nombre como keyword
-                if not kws and seccion_nombre.strip():
-                    base_kw = seccion_nombre.lower().strip()
-                    # Generar versión sin tildes
-                    no_accents_kw = ''.join(c for c in unicodedata.normalize('NFD', base_kw) if unicodedata.category(c) != 'Mn')
-                    
-                    kws = [base_kw]
-                    if no_accents_kw != base_kw:
-                        kws.append(no_accents_kw)
-                        
-                    logger.debug(f"[Filtro 2B] Sección personalizada '{seccion_nombre}' → usando keywords: {kws}")
+            variantes = self.generar_variantes_seccion(seccion_nombre, custom_kws)
 
             found = False
-            for kw in kws:
-                kw_escaped = re.escape(kw.lower())
-                pattern = r'(?m)^(?:#+\s*)?(?:(?:[0-9]{1,2}(?:\.[0-9]{1,2})*\.?|[a-z]{1,4}[\.\)])\s*)?' + kw_escaped + r'\b'
-                if re.search(pattern, t):
+            for kw in variantes:
+                # Normalizar la keyword sin acentos, igual que el documento procesado
+                kw_no_acc = ''.join(c for c in unicodedata.normalize('NFD', kw.lower()) if unicodedata.category(c) != 'Mn')
+                kw_escaped = re.escape(kw_no_acc)
+                pattern = r'(?m)^\s*(?:#+\s*)?(?:(?:[0-9]{1,2}(?:\.[0-9]{1,2})*\.?|[a-z]{1,4}[\.\)])\s*)?' + kw_escaped + r'(?:\b|\s|$)'
+                # También búsqueda libre en cualquier parte del texto (no solo inicio de línea)
+                if re.search(pattern, t, re.IGNORECASE) or (len(kw_no_acc) >= 5 and re.search(r'(?<![\w\u00c0-\u024f])' + kw_escaped + r'(?![\w\u00c0-\u024f])', t, re.IGNORECASE)):
                     found = True
                     break
 
@@ -160,6 +220,7 @@ class NLPService:
         Retorna: {ok, coherencia_pct, pares_invalidos, detalles}
         """
         t = texto_crudo.lower()
+        t = ''.join(c for c in unicodedata.normalize('NFD', t) if unicodedata.category(c) != 'Mn')
         t = re.sub(r'<br\s*/?>', '\n', t)
         t = re.sub(r'[*_|]', ' ', t)
         t = re.sub(r'[ \t]+', ' ', t)

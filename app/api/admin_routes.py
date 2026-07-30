@@ -1,16 +1,45 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from app.services.visualization_service import visualization_service
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-from typing import Optional
+from typing import Optional, List, Dict
+
+@router.get("/careers", tags=["Admin Panel"])
+async def get_careers():
+    from app.services.qdrant_service import qdrant_service
+    try:
+        _, payloads = qdrant_service.get_all_embeddings()
+        careers = {}
+        if payloads:
+            for meta in payloads:
+                u_id = meta.get("university_id")
+                c_id = meta.get("career_id")
+                if u_id and c_id:
+                    if u_id not in careers:
+                        careers[u_id] = set()
+                    careers[u_id].add(c_id)
+        
+        result = []
+        for u, cs in careers.items():
+            result.append({
+                "university_id": u,
+                "careers": list(cs)
+            })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/clusters-3d", response_class=HTMLResponse, tags=["Admin Panel"])
-async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None):
+async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None, university_id: Optional[str] = None, career_id: Optional[str] = None):
     
     try:
-        html_content = visualization_service.generate_3d_html(filter_cluster_id=filter_cluster_id)
+        html_content = visualization_service.generate_3d_html(filter_cluster_id=filter_cluster_id, university_id=university_id, career_id=career_id)
         if "<h1>Error" in html_content:
             return HTMLResponse(content=html_content, status_code=500)
         return HTMLResponse(content=html_content, status_code=200)
@@ -18,9 +47,9 @@ async def get_clusters_3d_html(filter_cluster_id: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/clusters-2d-html", response_class=HTMLResponse, tags=["Admin Panel"])
-async def get_clusters_2d_html(filter_cluster_id: Optional[str] = None):
+async def get_clusters_2d_html(filter_cluster_id: Optional[str] = None, university_id: Optional[str] = None, career_id: Optional[str] = None):
     try:
-        html_content = visualization_service.generate_2d_html(filter_cluster_id=filter_cluster_id)
+        html_content = visualization_service.generate_2d_html(filter_cluster_id=filter_cluster_id, university_id=university_id, career_id=career_id)
         if "<h1>Error" in html_content:
             return HTMLResponse(content=html_content, status_code=500)
         return HTMLResponse(content=html_content, status_code=200)
@@ -39,11 +68,11 @@ async def get_clusters_2d():
         raise HTTPException(status_code=500, detail=f"{str(e)}\n{tb}")
 
 @router.get("/clusters-stats", tags=["Admin Panel"])
-async def get_clusters_stats():
+async def get_clusters_stats(university_id: Optional[str] = None, career_id: Optional[str] = None):
     
     try:
         from app.services.clustering_service import clustering_engine
-        stats = visualization_service.get_cluster_stats()
+        stats = visualization_service.get_cluster_stats(university_id=university_id, career_id=career_id)
         if "error" in stats:
             raise HTTPException(status_code=500, detail=stats["error"])
         stats["is_clustering_running"] = clustering_engine.is_running
@@ -166,7 +195,9 @@ async def execute_clustering(background_tasks: BackgroundTasks):
                                 payloads=[{
                                     "project_id": p["id"],
                                     "text": chunk,
-                                    "source_url": p["source_url"]
+                                    "source_url": p["source_url"],
+                                    "university_id": p.get("university_id"),
+                                    "career_id": p.get("career_id")
                                 } for chunk in chunks]
                             )
                     # Quitar de pendientes y borrar el txt temporal
@@ -193,6 +224,7 @@ async def execute_clustering(background_tasks: BackgroundTasks):
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Header, Response
 from app.core.config_manager import config_manager
+from app.core.config import settings
 from pydantic import BaseModel
 import hashlib
 import json
@@ -202,6 +234,7 @@ from typing import List, Dict, Any, Optional
 class ConfigUpdateRequest(BaseModel):
     allowed_extensions: list[str]
     llm_provider: str = "ollama"
+    groq_model: Optional[str] = "llama-3.1-8b-instant"
     drive_folder_id: str = ""
     accepted_drive_folders: List[Dict[str, str]] = []
     exclusion_rules: List[str] = []
@@ -213,8 +246,34 @@ class ConfigUpdateRequest(BaseModel):
     authorId: Optional[str] = None
 
 @router.get("/config")
-async def get_system_config(response: Response, if_none_match: Optional[str] = Header(None)):
-    config_data = config_manager.get_config()
+async def get_system_config(
+    response: Response, 
+    projectId: Optional[str] = None, 
+    if_none_match: Optional[str] = Header(None)
+):
+    config_data = config_manager.get_config(projectId)
+    
+    # If projectId given, override config from the real DB value
+    if projectId:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/rules"
+                )
+                if r.status_code == 200:
+                    proj_info = r.json()
+                    config_data = dict(config_data)
+                    config_data["max_team_members"] = proj_info.get("max_team_members", config_data.get("max_team_members", 5))
+                    config_data["min_team_members"] = proj_info.get("min_team_members", config_data.get("min_team_members", 1))
+                    
+                    if proj_info.get("allowed_extensions"):
+                        config_data["allowed_extensions"] = proj_info.get("allowed_extensions")
+                    if proj_info.get("exclusion_rules") is not None:
+                        config_data["exclusion_rules"] = proj_info.get("exclusion_rules")
+                    if proj_info.get("project_sections") is not None:
+                        config_data["project_sections"] = proj_info.get("project_sections")
+        except Exception as e:
+            logger.warning(f"No se pudieron obtener las reglas reales del proyecto {projectId}: {e}")
     
     # Generate ETag
     config_json = json.dumps(config_data, sort_keys=True)
@@ -227,13 +286,28 @@ async def get_system_config(response: Response, if_none_match: Optional[str] = H
     response.headers["ETag"] = etag
     return config_data
 
+@router.get("/groq-models")
+async def get_groq_models():
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(f"{settings.LLM_SERVICE_URL}/api/v1/llm/groq-models")
+            res.raise_for_status()
+            return res.json()
+    except Exception as e:
+        logger.error(f"Error fetching groq models: {e}")
+        return {"status": "error", "data": []}
+
 @router.post("/config")
-async def update_system_config(request: ConfigUpdateRequest):
-    old_config = config_manager.get_config()
+async def update_system_config(request: ConfigUpdateRequest, projectId: Optional[str] = None):
+    if request.min_team_members > request.max_team_members:
+        raise HTTPException(status_code=400, detail="La cantidad mínima no puede ser mayor a la cantidad máxima.")
+
+    old_config = config_manager.get_config(projectId)
     
     new_config = {
         "allowed_extensions": request.allowed_extensions,
         "llm_provider": request.llm_provider,
+        "groq_model": request.groq_model,
         "drive_folder_id": request.drive_folder_id,
         "accepted_drive_folders": request.accepted_drive_folders,
         "exclusion_rules": request.exclusion_rules,
@@ -242,62 +316,84 @@ async def update_system_config(request: ConfigUpdateRequest):
         "max_team_members": request.max_team_members
     }
     
+    if projectId:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.patch(
+                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/rules",
+                    json={
+                        "max_team_members": request.max_team_members,
+                        "min_team_members": request.min_team_members,
+                        "allowed_extensions": request.allowed_extensions,
+                        "exclusion_rules": request.exclusion_rules,
+                        "project_sections": request.project_sections
+                    }
+                )
+                res.raise_for_status()
+        except Exception as e:
+            logger.warning(f"No se pudieron actualizar las reglas en el proyecto {projectId}: {e}")
+
+    
     # --- Generar notificación descriptiva ---
-    title_parts = []
-    body_parts = []
+    projectName = None
+    if projectId:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/team-size"
+                )
+                if res.status_code == 200:
+                    proj_info = res.json()
+                    projectName = proj_info.get("name")
+        except Exception:
+            pass
+
+    author = request.authorName if request.authorName else "Un docente"
+    if projectName:
+        title = f"{author} actualizó las reglas de '{projectName}'"
+    else:
+        title = f"{author} actualizó las reglas del proyecto"
     
     old_rules = set(old_config.get("exclusion_rules", []))
     new_rules = set(request.exclusion_rules)
     blocked = new_rules - old_rules
     unblocked = old_rules - new_rules
     
-    if blocked:
-        body_parts.append(f"Se han bloqueado los temas: {', '.join(blocked)}")
-    if unblocked:
-        body_parts.append(f"Se han desbloqueado los temas: {', '.join(unblocked)}")
-        
-    if blocked or unblocked:
-        title_parts.append("Se han actualizado los Temas para Proyecto")
-        
     old_sec_names = set(s.get("nombre", "") for s in old_config.get("project_sections", []))
     new_sec_names = set(s.get("nombre", "") for s in request.project_sections)
-    
     added_sections = new_sec_names - old_sec_names
     removed_sections = old_sec_names - new_sec_names
     
-    if added_sections:
-        body_parts.append(f"Secciones añadidas: {', '.join(added_sections)}")
-    if removed_sections:
-        body_parts.append(f"Secciones eliminadas: {', '.join(removed_sections)}")
-        
-    if added_sections or removed_sections:
-        title_parts.append("Se ha actualizado la Estructura de Proyecto")
-
     old_min = old_config.get("min_team_members", 1)
     old_max = old_config.get("max_team_members", 5)
+
+    detalles = []
+    
+    if blocked:
+        detalles.append(f"🚫 Temas bloqueados: {', '.join(blocked)}")
+    if unblocked:
+        detalles.append(f"✅ Temas permitidos: {', '.join(unblocked)}")
+        
+    if added_sections:
+        detalles.append(f"➕ Nuevas secciones: {', '.join(added_sections)}")
+    if removed_sections:
+        detalles.append(f"➖ Secciones quitadas: {', '.join(removed_sections)}")
+        
     if old_min != request.min_team_members or old_max != request.max_team_members:
-        body_parts.append(f"Nuevo límite de integrantes de equipo: {request.min_team_members} a {request.max_team_members} alumnos")
-        if "Se ha actualizado la Estructura de Proyecto" not in title_parts:
-            title_parts.append("Se ha actualizado la Estructura de Proyecto")
+        detalles.append(f"👥 Equipos: de {request.min_team_members} a {request.max_team_members} integrantes")
         
-    if not title_parts:
-        title = "Nuevas reglas y estructura de proyecto"
+    if detalles:
+        body = "\n".join(detalles)
     else:
-        title = " y ".join(title_parts)
-        
-    if not body_parts:
-        body = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!"
-    else:
-        body = ". ".join(body_parts) + "."
+        body = "Se actualizaron las reglas de evaluación."
         
     # ----------------------------------------
 
-    success = config_manager.save_config(new_config)
+    success = config_manager.save_config(new_config, projectId)
     if success:
         # Log to ActivityLog if authorId is provided
-        if request.authorId and body_parts:
+        if request.authorId:
             try:
-                import httpx
                 async with httpx.AsyncClient() as client:
                     await client.post(
                         "http://authentication-back-corvus:3000/internal/activity-log",
@@ -312,7 +408,7 @@ async def update_system_config(request: ConfigUpdateRequest):
                 print(f"Failed to log ActivityLog: {e}")
 
         # Trigger silent notification after saving
-        await notify_rules(title=title, body=body, authorName=request.authorName, authorPhotoUrl=request.authorPhotoUrl)
+        await notify_rules(title=title, body=body, authorName=request.authorName, authorPhotoUrl=request.authorPhotoUrl, projectId=projectId, authorId=request.authorId)
         return {"message": "Configuración actualizada con éxito.", "config": new_config}
     raise HTTPException(status_code=500, detail="Error al actualizar la configuración.")
 
@@ -339,32 +435,102 @@ async def generate_sections():
     raise HTTPException(status_code=500, detail="Fallo en la generación con IA.")
 
 @router.post("/notify-rules", tags=["Admin Panel"])
-async def notify_rules(title: str = "Nuevas reglas y estructura de proyecto", body: str = "Los profesores han actualizado las reglas de evaluación. ¡Entra a revisarlas!", authorName: Optional[str] = None, authorPhotoUrl: Optional[str] = None):
+async def notify_rules(title: str = "Nuevas reglas de proyecto", body: str = "Los profesores han actualizado las reglas.", authorName: Optional[str] = None, authorPhotoUrl: Optional[str] = None, projectId: Optional[str] = None, authorId: Optional[str] = None):
     print("📢 Intentando notificar a los dispositivos móviles (Push Visible)...", flush=True)
     try:
+        from app.core.config import settings
+        import asyncio
         async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "http://notifications-service:3001/api/notifications/topic/push",
-                json={
-                    "topic": "config_updates",
-                    "title": title,
-                    "body": body,
-                    "data": {
-                        "type": "CONFIG_UPDATED",
-                        "authorName": authorName or "",
-                        "authorPhotoUrl": authorPhotoUrl or ""
+            if not projectId:
+                # Fallback to global topic if no projectId is provided
+                resp = await client.post(
+                    "http://notifications-service:3001/api/notifications/topic/push",
+                    json={
+                        "topic": "config_updates",
+                        "title": title,
+                        "body": body,
+                        "data": {
+                            "type": "CONFIG_UPDATED",
+                            "authorName": authorName or "",
+                            "authorPhotoUrl": authorPhotoUrl or "",
+                            "projectId": "",
+                            "authorId": authorId or ""
+                        }
                     }
-                }
+                )
+                return {"message": "Notificación global enviada."}
+
+            # 1. Fetch project members
+            members_resp = await client.get(
+                f"{settings.AUTH_SERVICE_URL}/internal/projects/{projectId}/members"
             )
-            if resp.status_code == 200:
-                print("✅ Notificación enviada correctamente al servidor de Node.")
-                return {"message": "Notificación enviada a los dispositivos."}
-            else:
-                print(f"❌ Error al notificar: Código {resp.status_code}, Body: {resp.text}")
-                return {"message": "Config guardada, pero falló la notificación."}
+            
+            if members_resp.status_code != 200:
+                print(f"❌ Error al obtener miembros del proyecto: {members_resp.text}")
+                return {"message": "Config guardada, pero falló al obtener miembros del proyecto."}
+                
+            members_data = members_resp.json()
+            students = members_data.get("students", [])
+            professors = members_data.get("professors", [])
+            
+            # Remove the author from the notification list
+            if authorId:
+                if authorId in students:
+                    students.remove(authorId)
+                if authorId in professors:
+                    professors.remove(authorId)
+            
+            common_data = {
+                "type": "CONFIG_UPDATED",
+                "authorName": authorName or "",
+                "authorPhotoUrl": authorPhotoUrl or "",
+                "projectId": projectId or "",
+                "authorId": authorId or ""
+            }
+            
+            tasks = []
+            
+            # 2. Notify students
+            for student_id in students:
+                tasks.append(
+                    client.post(
+                        "http://notifications-service:3001/api/notifications/topic/push",
+                        json={
+                            "topic": f"user_{student_id}",
+                            "title": title,
+                            "body": body,
+                            "data": common_data
+                        }
+                    )
+                )
+                
+            # 3. Notify professors
+            prof_title = "Reglas de proyecto modificadas"
+            prof_body = f"Tu compañero {authorName or 'profesor'} ha modificado las reglas."
+            for prof_id in professors:
+                tasks.append(
+                    client.post(
+                        "http://notifications-service:3001/api/notifications/topic/push",
+                        json={
+                            "topic": f"user_{prof_id}",
+                            "title": prof_title,
+                            "body": prof_body,
+                            "data": common_data
+                        }
+                    )
+                )
+                
+            # Execute all notifications concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            success_count = sum(1 for r in results if not isinstance(r, Exception) and getattr(r, 'status_code', 0) == 200)
+            print(f"✅ Notificaciones enviadas correctamente: {success_count}/{len(tasks)}")
+            
+            return {"message": f"Notificaciones enviadas a {success_count} usuarios."}
+            
     except Exception as e:
-        print(f"❌ Error llamando al microservicio de notificaciones: {e}")
-        return {"message": "Falló la comunicación con notifications-service."}
+        print(f"❌ Error llamando a los microservicios: {e}")
+        return {"message": "Falló la comunicación con los microservicios."}
 
 
 @router.get("/recent-projects", tags=["Admin Panel"])
@@ -462,33 +628,109 @@ class AcceptDriveFolderRequest(BaseModel):
 @router.post("/drive/accept")
 async def accept_drive_folder(request: AcceptDriveFolderRequest):
     from app.services.drive_service import DriveService
+    from app.core.config import settings
     try:
         drive_service = DriveService()
         folder_info = drive_service.get_folder_info(request.folder_id)
         if not folder_info:
             raise HTTPException(status_code=404, detail="Carpeta no encontrada o sin acceso")
-            
+
+        # --- Extraer el correo del propietario de la carpeta ---
+        sharing_user = folder_info.get("sharingUser", {})
+        owner_email = sharing_user.get("emailAddress", "")
+
+        if not owner_email:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo determinar el correo del propietario de la carpeta."
+            )
+
+        # --- Verificar que el correo pertenece a un profesor en el sistema ---
+        professor_info = None
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/admin/find-professor-by-email",
+                    params={"email": owner_email},
+                    timeout=5.0
+                )
+                if resp.status_code == 200:
+                    professor_info = resp.json()
+        except Exception as auth_err:
+            logger.error(f"Error contacting auth service: {auth_err}")
+
+        if not professor_info:
+            raise HTTPException(
+                status_code=403,
+                detail=f"El correo '{owner_email}' no pertenece a ningún profesor registrado en Corvus. "
+                       f"El profesor debe compartir la carpeta con el mismo correo con el que se registró (principal o secundario)."
+            )
+
         current_config = config_manager.get_config()
         accepted_folders = current_config.get("accepted_drive_folders", [])
-        
-        # Check if already accepted
-        if any(f["id"] == request.folder_id for f in accepted_folders):
-            return {"message": "La carpeta ya estaba aceptada", "config": current_config}
-            
-        accepted_folders.append({
+
+        # Actualizar si ya existía o agregar nuevo
+        existing_idx = next((i for i, f in enumerate(accepted_folders) if f["id"] == request.folder_id), -1)
+        folder_record = {
             "id": folder_info["id"],
             "name": folder_info.get("name", "Carpeta sin nombre"),
-            "sharingUser": folder_info.get("sharingUser", {})
-        })
-        
+            "sharingUser": sharing_user,
+            "professor_id": professor_info.get("id"),
+            "professor_name": professor_info.get("full_name") or professor_info.get("email"),
+            "university_id": professor_info.get("university_id"),
+            "career_id": professor_info.get("career_id"),
+        }
+
+        if existing_idx >= 0:
+            accepted_folders[existing_idx] = folder_record
+        else:
+            accepted_folders.append(folder_record)
+
         current_config["accepted_drive_folders"] = accepted_folders
         if config_manager.save_config(current_config):
-            return {"message": "Carpeta aceptada con éxito", "config": current_config}
+            return {
+                "message": "Carpeta aceptada con éxito",
+                "professor": professor_info.get("full_name") or professor_info.get("email"),
+                "university_id": professor_info.get("university_id"),
+                "career_id": professor_info.get("career_id"),
+            }
         else:
             raise HTTPException(status_code=500, detail="Error al guardar configuración")
-            
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error accepting drive folder: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/drive/professor-folders")
+async def get_professor_folders(professor_id: str):
+    """
+    Returns the accepted Drive folders that belong to a specific professor.
+    Called by the Auth service when the professor views their profile.
+    """
+    try:
+        current_config = config_manager.get_config()
+        accepted_folders = current_config.get("accepted_drive_folders", [])
+        professor_folders = [
+            {
+                "folder_id": f["id"],
+                "folder_name": f["name"],
+                "status": "synced",
+                "university_id": f.get("university_id"),
+                "career_id": f.get("career_id"),
+            }
+            for f in accepted_folders
+            if f.get("professor_id") == professor_id
+        ]
+        return professor_folders
+    except Exception as e:
+        logger.error(f"Error fetching professor folders: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/test-qdrant-payloads/{project_id}")
+def test_qdrant_payloads(project_id: str):
+    from app.services.qdrant_service import qdrant_service
+    payloads = qdrant_service.get_project_payloads(project_id)
+    return {"project_id": project_id, "payload_count": len(payloads), "payloads": payloads}

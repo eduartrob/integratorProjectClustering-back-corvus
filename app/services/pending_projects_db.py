@@ -28,7 +28,7 @@ class PendingProjectsDB:
         except Exception as e:
             print(f"Error saving PendingProjectsDB: {e}")
 
-    def add_pending_project(self, project_id: str, name: str, raw_text: str, source_url: str):
+    def add_pending_project(self, project_id: str, name: str, raw_text: str, source_url: str, university_id: str = None, career_id: str = None):
         # Guardar el texto en un archivo aparte para no saturar el JSON
         text_file_path = os.path.join(PENDING_DIR, f"{project_id}.txt")
         try:
@@ -41,6 +41,8 @@ class PendingProjectsDB:
             "id": project_id,
             "name": name,
             "source_url": source_url,
+            "university_id": university_id,
+            "career_id": career_id,
             "status": "Pendiente",
             "detected_at": time.time(),
             "text_file": text_file_path

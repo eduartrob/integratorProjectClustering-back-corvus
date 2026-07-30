@@ -91,19 +91,24 @@ class QdrantService:
         query_vector: list,
         n_results: int = 5,
         filter_project_id: Optional[str] = None,
+        filter_university_id: Optional[str] = None,
+        filter_career_id: Optional[str] = None,
     ) -> list:
         """
         Busca los n vectores más similares.
         Retorna: [{project_id, score, payload}, ...]
         """
-        query_filter = None
+        must_conditions = []
         if filter_project_id:
-            query_filter = Filter(
-                must=[FieldCondition(
-                    key="project_id",
-                    match=MatchValue(value=filter_project_id)
-                )]
-            )
+            must_conditions.append(FieldCondition(key="project_id", match=MatchValue(value=filter_project_id)))
+        if filter_university_id:
+            must_conditions.append(FieldCondition(key="university_id", match=MatchValue(value=filter_university_id)))
+        if filter_career_id:
+            must_conditions.append(FieldCondition(key="career_id", match=MatchValue(value=filter_career_id)))
+            
+        query_filter = None
+        if must_conditions:
+            query_filter = Filter(must=must_conditions)
 
         results = self.client.query_points(
             collection_name=_COLLECTION_NAME,
@@ -126,6 +131,8 @@ class QdrantService:
         self,
         query_embeddings: list,
         n_results: int = 3,
+        filter_university_id: Optional[str] = None,
+        filter_career_id: Optional[str] = None,
     ) -> dict:
         """
         Búsqueda múltiple: agrega resultados de varios vectores query.
@@ -134,7 +141,12 @@ class QdrantService:
         all_docs, all_metas, all_distances = [], [], []
 
         for qvec in query_embeddings:
-            hits = self.search_similar(qvec, n_results=n_results)
+            hits = self.search_similar(
+                qvec, 
+                n_results=n_results, 
+                filter_university_id=filter_university_id,
+                filter_career_id=filter_career_id
+            )
             docs, metas, dists = [], [], []
             for h in hits:
                 docs.append(h["payload"].get("text", ""))
@@ -181,6 +193,30 @@ class QdrantService:
         vectors  = [p.vector for p in points]
         payloads = [p.payload for p in points]
         return vectors, payloads
+
+    def get_project_payloads(self, project_id: str) -> list:
+        """Obtiene todos los payloads (chunks) de un proyecto específico."""
+        from qdrant_client.http.models import FilterSelector, Filter, FieldCondition, MatchValue
+        points, offset = [], None
+        while True:
+            batch, next_offset = self.client.scroll(
+                collection_name=_COLLECTION_NAME,
+                scroll_filter=Filter(
+                    must=[FieldCondition(
+                        key="project_id",
+                        match=MatchValue(value=project_id)
+                    )]
+                ),
+                limit=256,
+                offset=offset,
+                with_vectors=False,
+                with_payload=True,
+            )
+            points.extend(batch)
+            if next_offset is None:
+                break
+            offset = next_offset
+        return [p.payload for p in points]
 
     def delete_by_project_id(self, project_id: str) -> bool:
         """Elimina todos los vectores de un proyecto por su ID."""

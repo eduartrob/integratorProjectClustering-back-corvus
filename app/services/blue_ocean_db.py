@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from typing import Dict, Any, List
 
-DB_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'blue_ocean_state.json')
+DB_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'blue_ocean_state.json')
 
 class BlueOceanDB:
     def __init__(self):
@@ -27,10 +27,15 @@ class BlueOceanDB:
         except Exception as e:
             print(f"Error saving BlueOceanDB: {e}")
 
+    def reload(self):
+        self.state = self._load_db()
+
     def get_all(self) -> Dict[str, Any]:
+        self.state = self._load_db()
         return self.state
 
     def get_niche(self, niche_id: str) -> Dict[str, Any]:
+        self.state = self._load_db()
         return self.state.get(niche_id, self._create_default_niche(niche_id))
 
     def _create_default_niche(self, niche_id: str) -> Dict[str, Any]:

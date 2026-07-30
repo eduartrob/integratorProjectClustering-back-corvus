@@ -53,7 +53,29 @@ class BlueOceanWorker:
                     logger.info(f"Worker: Procesando análisis para el nicho {niche_id}")
                     
                     title = niche_id.replace('proyecto_', '').replace('.md', '').replace('.pdf', '').replace('_', ' ').title()
-                    description = "Nicho inexplorado detectado por baja colisión semántica."
+                    
+                    # Extraer el texto real de Qdrant para este proyecto
+                    description = f"Oportunidad de investigación e innovación tecnológica avanzada enfocada en la categoría {category} sobre el dominio {title}."
+                    try:
+                        payloads = qdrant_service.get_project_payloads(niche_id)
+                        project_texts = []
+                        if payloads:
+                            for meta in payloads:
+                                text_chunk = meta.get('text', '')
+                                if text_chunk:
+                                    project_texts.append(text_chunk)
+                        
+                        if project_texts:
+                            full_text = "\n".join(project_texts)
+                            if "colisión semántica" in full_text.lower() or "nicho inexplorado" in full_text.lower() or len(full_text.strip()) < 50:
+                                description = f"Investigación y desarrollo de tecnologías avanzadas y soluciones de ingeniería en el dominio de {title}."
+                            else:
+                                description = full_text[:15000]
+                        else:
+                            logger.warning(f"Worker: No se encontró texto para {niche_id} en Qdrant.")
+                    except Exception as e:
+                        logger.error(f"Worker: Error extrayendo texto para {niche_id}: {e}")
+
                     category = "INNOVACIÓN ACADÉMICA"
                     
                     async with analysis_lock:

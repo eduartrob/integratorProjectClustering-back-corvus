@@ -9,13 +9,12 @@ import os
 
 class VisualizationService:
     def __init__(self):
-        self.umap_model_path = os.path.join(settings.MODELS_DIR, "umap_50d_model.joblib")
         self.cluster_colors = [
             '#4FC3F7', '#FFB74D', '#81C784', '#F06292', '#CE93D8',
             '#80DEEA', '#FFCC02', '#FF8A65', '#A5D6A7', '#90CAF9'
         ]
 
-    def _get_data_from_db(self):
+    def _get_data_from_db(self, university_id=None, career_id=None):
         
         vectors, payloads = qdrant_service.get_all_embeddings()
         if not vectors or len(vectors) == 0:
@@ -23,13 +22,18 @@ class VisualizationService:
 
         projects_data = {}
         for i, meta in enumerate(payloads):
+            if university_id and meta.get('university_id') != university_id:
+                continue
+            if career_id and meta.get('career_id') != career_id:
+                continue
+
             p_id = meta.get('project_id')
             if not p_id:
                 continue
             if p_id not in projects_data:
                 projects_data[p_id] = {
                     'embeddings': [],
-                    'cluster_id': meta.get('cluster_id', 0),
+                    'cluster_id': str(meta.get('cluster_id', '-1')),
                     'is_blue_ocean': meta.get('is_blue_ocean', False),
                     'cluster_name': meta.get('cluster_name', '')
                 }
@@ -40,15 +44,15 @@ class VisualizationService:
         labels = []
         for p in unique_ids:
             if projects_data[p].get('is_blue_ocean', False):
-                labels.append(-1)
+                labels.append("-1")
             else:
-                labels.append(projects_data[p]['cluster_id'])
+                labels.append(str(projects_data[p]['cluster_id']))
         
         return unique_ids, np.array(aggregated_embeddings), labels, projects_data
 
-    def get_cluster_names(self):
+    def get_cluster_names(self, university_id=None, career_id=None):
         
-        unique_ids, _, labels, projects_data = self._get_data_from_db()
+        unique_ids, _, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return {}
 
@@ -76,9 +80,9 @@ class VisualizationService:
                 
         return cluster_names
 
-    def get_cluster_stats(self):
+    def get_cluster_stats(self, university_id=None, career_id=None):
         
-        unique_ids, _, labels, projects_data = self._get_data_from_db()
+        unique_ids, _, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return {
                 "total_projects": 0,
@@ -90,13 +94,13 @@ class VisualizationService:
 
         cluster_counts = Counter(labels)
         total_projects = len(unique_ids)
-        blue_oceans = cluster_counts.get(-1, 0)
+        blue_oceans = cluster_counts.get("-1", 0)
         
-        cluster_names = self.get_cluster_names()
+        cluster_names = self.get_cluster_names(university_id, career_id)
         
         clusters_info = []
         for cid, count in cluster_counts.items():
-            if cid != -1:
+            if str(cid) != "-1":
                 clusters_info.append({
                     "cluster_id": cid, 
                     "project_count": count,
@@ -111,21 +115,18 @@ class VisualizationService:
             "cluster_names": cluster_names
         }
 
-    def get_2d_scatter_data(self):
+    def get_2d_scatter_data(self, university_id=None, career_id=None):
         
-        if not os.path.exists(self.umap_model_path):
-            return []
-
-        unique_ids, embeddings_384d, labels, _ = self._get_data_from_db()
+        unique_ids, embeddings_384d, labels, _ = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return []
 
         try:
-            reducer_clustering = joblib.load(self.umap_model_path)
-            embeddings_20d = reducer_clustering.transform(embeddings_384d)
-            
-            reducer_2d = umap.UMAP(n_components=2, n_neighbors=12, min_dist=0.05, metric='euclidean', random_state=42)
-            embeddings_2d = reducer_2d.fit_transform(embeddings_20d)
+            n_neighbors = min(12, len(embeddings_384d) - 1)
+            if n_neighbors < 2:
+                n_neighbors = 2
+            reducer_2d = umap.UMAP(n_components=2, n_neighbors=n_neighbors, min_dist=0.05, metric='cosine', random_state=42)
+            embeddings_2d = reducer_2d.fit_transform(embeddings_384d)
         except Exception:
             return []
 
@@ -134,14 +135,14 @@ class VisualizationService:
             scatter_data.append({
                 "x": float(embeddings_2d[i, 0]),
                 "y": float(embeddings_2d[i, 1]),
-                "label": int(labels[i]),
+                "label": int(labels[i].split('_')[-1]) if labels[i].split('_')[-1].lstrip('-').isdigit() else hash(labels[i]) % 100,
                 "name": unique_ids[i].replace('_', ' ').title()
             })
             
         return scatter_data
 
-    def generate_3d_html(self, filter_cluster_id: str = None):
-        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
+    def generate_3d_html(self, filter_cluster_id: str = None, university_id=None, career_id=None):
+        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
@@ -154,19 +155,15 @@ class VisualizationService:
         except Exception as e:
             return f"<html><body><h1>Error de proyeccion</h1><p>{str(e)}</p></body></html>"
 
-        cluster_names = self.get_cluster_names()
+        cluster_names = self.get_cluster_names(university_id, career_id)
         fig = go.Figure()
         unique_labels = sorted(set(labels))
-        cluster_labels_valid = [l for l in unique_labels if l != -1]
+        cluster_labels_valid = [str(l) for l in unique_labels if str(l) != "-1"]
 
         if filter_cluster_id == "blue_oceans":
             cluster_labels_valid = []
         elif filter_cluster_id is not None and filter_cluster_id != "global":
-            try:
-                target_id = int(filter_cluster_id)
-                cluster_labels_valid = [l for l in cluster_labels_valid if l == target_id]
-            except ValueError:
-                pass
+            cluster_labels_valid = [l for l in cluster_labels_valid if str(l) == str(filter_cluster_id)]
 
         for cluster_id in cluster_labels_valid:
             indices = [i for i, l in enumerate(labels) if l == cluster_id]
@@ -176,7 +173,11 @@ class VisualizationService:
                 f"<b>{unique_ids[i].replace('_', ' ').title()}</b><br>Cluster: {cluster_names.get(cluster_id, f'Clúster {cluster_id}')}"
                 for i in indices
             ]
-            color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
+            try:
+                c_idx = int(str(cluster_id).split('_')[-1])
+            except Exception:
+                c_idx = sum(ord(c) for c in str(cluster_id))
+            color = self.cluster_colors[c_idx % len(self.cluster_colors)]
 
             fig.add_trace(go.Scatter3d(
                 x=x, y=y, z=z, mode='markers+text',
@@ -235,8 +236,8 @@ class VisualizationService:
 
         return fig.to_html(include_plotlyjs='cdn', full_html=True)
 
-    def generate_2d_html(self, filter_cluster_id: str = None):
-        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
+    def generate_2d_html(self, filter_cluster_id: str = None, university_id=None, career_id=None):
+        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return "<html><body style='display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#a0a0a0;'><h2>Aún no hay proyectos procesados</h2></body></html>"
 
@@ -262,19 +263,15 @@ class VisualizationService:
                 [cy + sy * math.sin(2 * math.pi * i / n) for i in range(n + 1)]
             )
 
-        cluster_names = self.get_cluster_names()
+        cluster_names = self.get_cluster_names(university_id, career_id)
         fig = go.Figure()
         unique_labels = sorted(set(labels))
-        cluster_labels_valid = [l for l in unique_labels if l != -1]
+        cluster_labels_valid = [str(l) for l in unique_labels if str(l) != "-1"]
 
         if filter_cluster_id == "blue_oceans":
             cluster_labels_valid = []
         elif filter_cluster_id is not None and filter_cluster_id != "global":
-            try:
-                target_id = int(filter_cluster_id)
-                cluster_labels_valid = [l for l in cluster_labels_valid if l == target_id]
-            except ValueError:
-                pass
+            cluster_labels_valid = [l for l in cluster_labels_valid if str(l) == str(filter_cluster_id)]
 
         # Outer + inner ellipses per cluster (KDE-style)
         for cluster_id in cluster_labels_valid:
@@ -282,7 +279,11 @@ class VisualizationService:
             if len(indices) < 3:
                 continue
             pts = embeddings_2d[indices]
-            color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
+            try:
+                c_idx = int(str(cluster_id).split('_')[-1])
+            except Exception:
+                c_idx = sum(ord(c) for c in str(cluster_id))
+            color = self.cluster_colors[c_idx % len(self.cluster_colors)]
             cx, cy = float(pts[:, 0].mean()), float(pts[:, 1].mean())
             sx = float(pts[:, 0].std()) * 2.4
             sy = float(pts[:, 1].std()) * 2.4
@@ -303,7 +304,11 @@ class VisualizationService:
         for cluster_id in cluster_labels_valid:
             indices = [i for i, l in enumerate(labels) if l == cluster_id]
             x, y = embeddings_2d[indices, 0], embeddings_2d[indices, 1]
-            color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
+            try:
+                c_idx = int(str(cluster_id).split('_')[-1])
+            except Exception:
+                c_idx = sum(ord(c) for c in str(cluster_id))
+            color = self.cluster_colors[c_idx % len(self.cluster_colors)]
             hover_texts = [
                 f"<b>{unique_ids[i].replace('_', ' ').title()}</b><br>Clúster: {cluster_names.get(cluster_id, f'Clúster {cluster_id}')}"
                 for i in indices
@@ -362,7 +367,7 @@ class VisualizationService:
 
 
     def get_minimap_data(self):
-        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db()
+        unique_ids, embeddings_384d, labels, projects_data = self._get_data_from_db(university_id, career_id)
         if not unique_ids:
             return {"clusters": []}
 
@@ -376,7 +381,7 @@ class VisualizationService:
         except Exception as e:
             return {"clusters": []}
 
-        cluster_names = self.get_cluster_names()
+        cluster_names = self.get_cluster_names(university_id, career_id)
         unique_labels = sorted(set(labels))
         cluster_labels_valid = [l for l in unique_labels if l != -1]
 
@@ -386,7 +391,11 @@ class VisualizationService:
             if not indices:
                 continue
             pts = embeddings_2d[indices]
-            color = self.cluster_colors[cluster_id % len(self.cluster_colors)]
+            try:
+                c_idx = int(str(cluster_id).split('_')[-1])
+            except Exception:
+                c_idx = sum(ord(c) for c in str(cluster_id))
+            color = self.cluster_colors[c_idx % len(self.cluster_colors)]
             cx, cy = float(pts[:, 0].mean()), float(pts[:, 1].mean())
             name = cluster_names.get(cluster_id, f"Cluster {cluster_id}")
             minimap_clusters.append({
