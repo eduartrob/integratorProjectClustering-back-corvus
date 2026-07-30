@@ -32,18 +32,20 @@ class ConfigManager:
     def get_config(self, project_id: str = None):
         config_path = self._get_config_path(project_id)
         
-        is_fallback = False
-        # Si la configuración del proyecto no existe, retornar la configuración global
+        # Si la configuración del proyecto no existe, retornamos valores por defecto vacíos
         if project_id and not os.path.exists(config_path):
-            config_path = self.default_config_path
-            is_fallback = True
+            return {
+                "allowed_extensions": [".pdf", ".md", ".txt"],
+                "llm_provider": "groq",
+                "exclusion_rules": [],
+                "project_sections": [],
+                "min_team_members": 1,
+                "max_team_members": 5
+            }
 
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                if is_fallback:
-                    data["project_sections"] = []
-                    data["exclusion_rules"] = []
                 return data
         except Exception as e:
             logger.error(f"Error leyendo config ({config_path}): {e}")

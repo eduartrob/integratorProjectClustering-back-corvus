@@ -27,10 +27,15 @@ class BlueOceanDB:
         except Exception as e:
             print(f"Error saving BlueOceanDB: {e}")
 
+    def reload(self):
+        self.state = self._load_db()
+
     def get_all(self) -> Dict[str, Any]:
+        self.state = self._load_db()
         return self.state
 
     def get_niche(self, niche_id: str) -> Dict[str, Any]:
+        self.state = self._load_db()
         return self.state.get(niche_id, self._create_default_niche(niche_id))
 
     def _create_default_niche(self, niche_id: str) -> Dict[str, Any]:
